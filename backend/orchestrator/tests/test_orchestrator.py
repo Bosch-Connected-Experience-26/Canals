@@ -1,5 +1,9 @@
+from datetime import datetime, timezone
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.models import CacheMetadata, JourneyCache, Station, StationAvailability
 from app.main import app
 
 client = TestClient(app)
@@ -57,6 +61,50 @@ def test_live_availability_uses_cloud_when_online():
     assert body["selectedStation"]["cachedAvailability"]["source"] == "live_mock"
 
 
+def test_plan_journey_uses_maps_api_and_updates_cache(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    def fake_build_journey_cache(journey_id, origin, destination, vehicle):
+        return JourneyCache(
+            metadata=CacheMetadata(
+                journeyId=journey_id,
+                generatedAt=datetime.now(timezone.utc),
+                stationCount=1,
+                source="maps_api",
+            ),
+            stations=[
+                Station(
+                    id="maps-demo",
+                    name="Mapped Demo Charger",
+                    lat=53.55,
+                    lng=10.0,
+                    distanceKm=42,
+                    detourKm=2,
+                    maxKw=150,
+                    connectors=["CCS"],
+                    amenities=["coffee"],
+                    reliability=0.9,
+                    cachedAvailability=StationAvailability(status="unknown", source="maps_api"),
+                    reachableWithCurrentRange=True,
+                )
+            ],
+        )
+
+    monkeypatch.setattr(main.maps_client, "build_journey_cache", fake_build_journey_cache)
+
+    response = post_command("Plan a journey from Berlin to Hamburg", online=True)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["route"] == "local_simple"
+    assert body["intent"] == "plan_journey"
+    assert body["actions"][0]["type"] == "journey_cache_created"
+    assert body["actions"][0]["payload"]["source"] == "maps_api"
+
+    search = post_command("Find a fast charger with coffee", online=False)
+    assert search.json()["selectedStation"]["id"] == "maps-demo"
+
+
 def test_offline_reachable_charger_uses_local_cache():
     response = post_command("Find a charger I can reach", online=False)
     body = response.json()
@@ -88,3 +136,45 @@ def test_navigate_there_uses_previous_selection():
     assert body["route"] == "local_simple"
     assert body["actions"][0]["type"] == "start_navigation"
     assert body["selectedStation"]["id"] == selected_id
+
+
+def test_lights_off_calls_car_api(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    calls = []
+
+    def fake_set_lights(enabled):
+        calls.append(enabled)
+        return {"status": "ok", "vehicle": "test-car:55555"}
+
+    monkeypatch.setattr(main.car_client, "set_lights", fake_set_lights)
+
+    response = post_command("Turn the lights off", online=False)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["route"] == "local_simple"
+    assert body["intent"] == "lights_off"
+    assert body["spokenResponse"] == "Turning the lights off."
+    assert body["actions"][0]["type"] == "vehicle_lights_off"
+    assert body["actions"][0]["payload"]["carApi"]["status"] == "ok"
+    assert calls == [False]
+
+
+def test_lights_on_reports_car_api_unavailable(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    def fake_set_lights(enabled):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(main.car_client, "set_lights", fake_set_lights)
+
+    response = post_command("Switch the headlights on", online=False)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["route"] == "local_simple"
+    assert body["intent"] == "lights_on"
+    assert "could not reach the car API" in body["spokenResponse"]
+    assert body["actions"][0]["type"] == "vehicle_lights_on"
+    assert body["debug"]["warnings"]

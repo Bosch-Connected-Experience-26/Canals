@@ -1,0 +1,30 @@
+{
+  "Vehicle": {
+    "description": "High-level vehicle data.",
+    "type": "branch",
+    "children": {
+      "RequestTakeOver": {
+        "datatype": "string",
+        "description": "Request take over control of the Mini Demo Car.",
+        "type": "actuator"
+      },
+      "Body": {
+        "description": "All body components.",
+        "type": "branch",
+        "children": {
+          "Lights": {
+            "description": "Exterior and interior lights.",
+            "type": "branch",
+            "children": {
+              "ExteriorLightControl": {
+                "datatype": "string",
+                "description": "Controls exterior lights. Format: [on/off, light_id, client_id].",
+                "type": "actuator"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

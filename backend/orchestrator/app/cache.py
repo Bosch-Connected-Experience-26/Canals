@@ -41,6 +41,10 @@ class JourneyCacheStore:
         self._save(cache)
         return cache
 
+    def replace(self, cache: JourneyCache) -> JourneyCache:
+        self._save(cache)
+        return cache
+
     def get(self, journey_id: str) -> Optional[JourneyCache]:
         if self._collection is not None:
             document = self._collection.find_one({"_id": journey_id})

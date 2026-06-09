@@ -47,7 +47,7 @@ class StationAvailability(BaseModel):
     status: Literal["high", "medium", "low", "unknown"]
     availableStalls: Optional[int] = Field(default=None, ge=0)
     totalStalls: Optional[int] = Field(default=None, ge=0)
-    source: Literal["cached", "live_mock", "aws_bedrock"] = "cached"
+    source: Literal["cached", "maps_api", "live_mock", "aws_bedrock"] = "cached"
 
 
 class Station(BaseModel):
@@ -109,6 +109,8 @@ class RouterDecision(BaseModel):
     route: RouteLabel
     requiresWeb: bool = False
     intent: str
+    origin: Optional[str] = None
+    destination: Optional[str] = None
     constraints: RouterConstraints = Field(default_factory=RouterConstraints)
     confidence: float = Field(ge=0, le=1)
     reason: str

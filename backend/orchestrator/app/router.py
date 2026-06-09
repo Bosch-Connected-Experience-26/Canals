@@ -22,6 +22,8 @@ LIVE_WORDS = {
     "internet",
 }
 NAVIGATE_WORDS = {"navigate", "directions", "take me", "go there", "route me"}
+PLAN_WORDS = {"plan", "drive", "trip", "journey", "route from", "from"}
+LIGHT_WORDS = {"light", "lights", "headlight", "headlights", "beam"}
 
 
 def decide_route(request: CommandRequest) -> RouterDecision:
@@ -46,6 +48,37 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             constraints=constraints,
             confidence=0.91,
             reason="Navigation to the previously selected cached station is a local action.",
+        )
+
+    if _contains_any(transcript, LIGHT_WORDS):
+        if _contains_any(transcript, {"off", "disable", "turn off", "switch off"}):
+            return RouterDecision(
+                route=RouteLabel.local_simple,
+                intent="lights_off",
+                constraints=constraints,
+                confidence=0.91,
+                reason="Exterior lights are controlled through the local Car API.",
+            )
+        if _contains_any(transcript, {"on", "enable", "turn on", "switch on"}):
+            return RouterDecision(
+                route=RouteLabel.local_simple,
+                intent="lights_on",
+                constraints=constraints,
+                confidence=0.91,
+                reason="Exterior lights are controlled through the local Car API.",
+            )
+
+    origin, destination = _extract_journey_points(transcript)
+    if origin and destination and _contains_any(transcript, PLAN_WORDS):
+        return RouterDecision(
+            route=RouteLabel.local_simple,
+            requiresWeb=True,
+            intent="plan_journey",
+            origin=origin,
+            destination=destination,
+            constraints=constraints,
+            confidence=0.84,
+            reason="The user is planning a route; maps-api can build a local journey cache.",
         )
 
     requires_web = _contains_any(transcript, LIVE_WORDS)
@@ -135,3 +168,23 @@ def _live_intent(transcript: str) -> str:
     if "traffic" in transcript:
         return "check_live_traffic"
     return "check_live_availability"
+
+
+def _extract_journey_points(transcript: str) -> tuple[str | None, str | None]:
+    match = re.search(r"\bfrom\s+(.+?)\s+(?:to|towards)\s+(.+)", transcript)
+    if not match:
+        match = re.search(r"\b(?:to|towards)\s+(.+?)\s+from\s+(.+)", transcript)
+        if not match:
+            return None, None
+        destination = _clean_place(match.group(1))
+        origin = _clean_place(match.group(2))
+        return origin, destination
+
+    origin = _clean_place(match.group(1))
+    destination = _clean_place(match.group(2))
+    return origin, destination
+
+
+def _clean_place(value: str) -> str:
+    value = re.sub(r"\b(with|using|and|please|today|tomorrow)\b.*$", "", value.strip())
+    return value.strip(" .,")
