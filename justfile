@@ -15,6 +15,9 @@ test:
     docker compose up -d mongodb maps-api cache-service
     docker compose --profile test run --rm e2e
 
+car-mock:
+    docker compose up bosch-car-mock
+
 db:
     docker compose up -d
 

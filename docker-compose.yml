@@ -7,6 +7,8 @@ services:
     container_name: canals-orchestrator
     ports:
       - "8001:8000"
+    env_file:
+      - .env
     environment:
       - MONGODB_URI=mongodb://root:root@mongodb:27017/?authSource=admin
       - MONGODB_DATABASE=canals
@@ -69,6 +71,14 @@ services:
       - "8000:8000"
     environment:
       - OCM_API_KEY=${OCM_API_KEY:-}
+    restart: unless-stopped
+
+  bosch-car-mock:
+    image: ghcr.io/eclipse-kuksa/kuksa-databroker:main
+    container_name: canals-bosch-car-mock
+    command: --insecure
+    ports:
+      - "55556:55555"
     restart: unless-stopped
 
   e2e:
