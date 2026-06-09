@@ -12,7 +12,7 @@ maps-api:
     docker compose up -d maps-api
 
 test:
-    docker compose up -d mongodb maps-api cache-service
+    docker compose up -d mongodb maps-api cache-service bosch-car-mock car-api
     docker compose --profile test run --rm e2e
 
 car-api:
@@ -39,6 +39,10 @@ demo-nearest:
 
 orchestrator:
     docker compose up --build orchestrator
+
+ollama-pull:
+    docker compose up -d ollama
+    docker compose exec ollama ollama pull llama3.2:3b
 
 api:
     cd backend/orchestrator && uvicorn app.main:app --reload --port 8000
