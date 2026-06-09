@@ -71,6 +71,16 @@ def test_nearby_offline():
     assert len(resp.json()) > 0, "Expected nearby EV stations in Frankfurt"
 
 
+def test_nearest_station():
+    resp = client.get(f"{BASE}/nearest", params={"lat": 50.1109, "lng": 8.6821})
+    assert resp.status_code == 200
+    station = resp.json()
+    assert station["distance_m"] >= 0
+    assert station["lat"] != 0
+    assert station["lng"] != 0
+    assert station["name"]
+
+
 def test_journey_not_found():
     resp = client.get(f"{BASE}/journey/does-not-exist")
     assert resp.status_code == 404
