@@ -1,0 +1,4 @@
+Connect to MongoDB
+
+python -m pip install "pymongo[srv]"
+
