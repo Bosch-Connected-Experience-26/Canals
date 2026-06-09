@@ -4,7 +4,9 @@ from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
+from .car_client import CarApiClient
 from .cache import JourneyCacheStore
 from .cloud import CloudGateway
 from .config import load_settings
@@ -28,11 +30,18 @@ app = FastAPI(
     description="Offline-aware orchestration API for EV charging voice control.",
     version="0.1.0",
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 settings = load_settings()
 store = JourneyCacheStore(settings)
 cloud_gateway = CloudGateway(settings)
 local_router = LocalAIRouter(settings)
 maps_client = MapsApiClient(settings)
+car_client = CarApiClient(settings)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -211,6 +220,9 @@ def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache)
             debug=_debug(decision, cache, False, []),
         )
 
+    if decision.intent in {"lights_on", "lights_off"}:
+        return _handle_lights_command(decision, cache)
+
     return CommandResponse(
         route=RouteLabel.local_simple,
         spokenResponse=(
@@ -219,6 +231,35 @@ def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache)
         ),
         intent=decision.intent,
         debug=_debug(decision, cache, False, []),
+    )
+
+
+def _handle_lights_command(decision, cache: JourneyCache) -> CommandResponse:
+    enabled = decision.intent == "lights_on"
+    action_type = "vehicle_lights_on" if enabled else "vehicle_lights_off"
+    label = "Turn lights on" if enabled else "Turn lights off"
+    warnings: List[str] = []
+    payload = {"requestedState": "on" if enabled else "off"}
+
+    try:
+        payload["carApi"] = car_client.set_lights(enabled)
+        spoken = "Turning the lights on." if enabled else "Turning the lights off."
+    except Exception as exc:
+        warnings.append(f"Car API unavailable: {exc.__class__.__name__}.")
+        spoken = "I understood the lights command, but I could not reach the car API."
+
+    return CommandResponse(
+        route=RouteLabel.local_simple,
+        spokenResponse=spoken,
+        intent=decision.intent,
+        actions=[
+            CommandAction(
+                type=action_type,
+                label=label,
+                payload=payload,
+            )
+        ],
+        debug=_debug(decision, cache, False, warnings),
     )
 
 

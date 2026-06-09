@@ -22,6 +22,7 @@ LIVE_WORDS = {
 }
 NAVIGATE_WORDS = {"navigate", "directions", "take me", "go there", "route me"}
 PLAN_WORDS = {"plan", "drive", "trip", "journey", "route from", "from"}
+LIGHT_WORDS = {"light", "lights", "headlight", "headlights", "beam"}
 
 
 def decide_route(request: CommandRequest) -> RouterDecision:
@@ -47,6 +48,24 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             confidence=0.91,
             reason="Navigation to the previously selected cached station is a local action.",
         )
+
+    if _contains_any(transcript, LIGHT_WORDS):
+        if _contains_any(transcript, {"off", "disable", "turn off", "switch off"}):
+            return RouterDecision(
+                route=RouteLabel.local_simple,
+                intent="lights_off",
+                constraints=constraints,
+                confidence=0.91,
+                reason="Exterior lights are controlled through the local Car API.",
+            )
+        if _contains_any(transcript, {"on", "enable", "turn on", "switch on"}):
+            return RouterDecision(
+                route=RouteLabel.local_simple,
+                intent="lights_on",
+                constraints=constraints,
+                confidence=0.91,
+                reason="Exterior lights are controlled through the local Car API.",
+            )
 
     origin, destination = _extract_journey_points(transcript)
     if origin and destination and _contains_any(transcript, PLAN_WORDS):

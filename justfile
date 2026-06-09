@@ -37,6 +37,9 @@ demo-cache:
 demo-nearest:
     curl "http://localhost:8002/nearest?lat=51.3397&lng=12.3731&poi_type=ev_charging"
 
+demo-e2e:
+    powershell -ExecutionPolicy Bypass -File scripts/demo-e2e.ps1
+
 orchestrator:
     docker compose up --build orchestrator
 

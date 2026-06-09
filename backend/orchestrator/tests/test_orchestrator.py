@@ -136,3 +136,45 @@ def test_navigate_there_uses_previous_selection():
     assert body["route"] == "local_simple"
     assert body["actions"][0]["type"] == "start_navigation"
     assert body["selectedStation"]["id"] == selected_id
+
+
+def test_lights_off_calls_car_api(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    calls = []
+
+    def fake_set_lights(enabled):
+        calls.append(enabled)
+        return {"status": "ok", "vehicle": "test-car:55555"}
+
+    monkeypatch.setattr(main.car_client, "set_lights", fake_set_lights)
+
+    response = post_command("Turn the lights off", online=False)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["route"] == "local_simple"
+    assert body["intent"] == "lights_off"
+    assert body["spokenResponse"] == "Turning the lights off."
+    assert body["actions"][0]["type"] == "vehicle_lights_off"
+    assert body["actions"][0]["payload"]["carApi"]["status"] == "ok"
+    assert calls == [False]
+
+
+def test_lights_on_reports_car_api_unavailable(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    def fake_set_lights(enabled):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(main.car_client, "set_lights", fake_set_lights)
+
+    response = post_command("Switch the headlights on", online=False)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["route"] == "local_simple"
+    assert body["intent"] == "lights_on"
+    assert "could not reach the car API" in body["spokenResponse"]
+    assert body["actions"][0]["type"] == "vehicle_lights_on"
+    assert body["debug"]["warnings"]
