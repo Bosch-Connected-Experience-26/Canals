@@ -45,3 +45,8 @@ graph LR
 ```
 
 The target vehicle is selected entirely by the `VEHICLE_URL` environment variable — no code change needed to switch between mock and real car.
+
+## Links
+
+- [[Car Mock]] — local KUKSA databroker mock, logs all signal writes
+- [[Car Vehicle]] — real Bosch demo car, VSS signals, environment matrix
