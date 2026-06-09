@@ -19,5 +19,13 @@ services:
       timeout: 5s
       retries: 5
 
+  maps-api:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.maps-api
+    container_name: canals-maps-api
+    ports:
+      - "8000:8000"
+
 volumes:
   mongodb-data:

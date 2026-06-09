@@ -5,6 +5,9 @@ structurizr:
         structurizr/structurizr local
 
 
+maps-api:
+    docker compose up -d maps-api
+
 db:
     docker compose up -d
 
