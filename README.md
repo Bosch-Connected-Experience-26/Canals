@@ -2,28 +2,40 @@
 
 ## **Team Name / Tagline**
 
-*[Brief catchy tagline or team name]*
+**TBD**  
+*Hybrid voice control for vehicles — local-first, cloud-optional.*
 
 > 💡 **Tip:** Create a sheet of paper with your team name on the desk so mentors and organizers can find you easily! 
 
-*[Feel free to include a picture representing your team here]*
+![Team picture](TeamPicture.jpeg)
 
 ## **Team Members**
 
 | Name | GitHub Handle | Role(s) |
 | :--- | :--- | :--- |
-| Firstname Lastname | [@username](https://github.com/username) | e.g., Backend, Frontend, UX, Pitcher |
-| | | |
-| | | |
-| | | |
+| Abdulla | TBD | Development |
+| Alex | TBD | Frontend, Backend |
+| Christian | TBD | Backend, Software Architecture, ML/CV |
+| Li | TBD | Product Design, UX, Product Journey |
+| Nico | TBD | Automation, Business / Product |
+| Sofiia | TBD | TBD |
 
 ## **Challenge**
 
-*[Which challenge have you decided to compete for?]*
+**Voice Assistant for Vehicle Control**  
+Future Mobility (Automotive)
 
 ## **Core Idea**
 
-*[What is your rough solution idea?]*
+We are building a **hybrid AI-powered in-vehicle voice assistant** for vehicle control.
+
+The idea is to use a **local-first architecture** so core voice commands can still work with low latency and without a permanent cloud connection. When connectivity is available, the system can route more advanced tasks to online services, but the essential vehicle-control flow should remain available offline or semi-online.
+
+Our prototype focuses on:
+- voice interaction in an **automotive context**
+- **edge/cloud routing** depending on latency and availability
+- reliable fallback behavior when cloud services are unavailable
+- integration with a vehicle API, simulator, or mocked backend for the demo
 
 <br>
 
@@ -31,16 +43,20 @@
 
 ```mermaid
 graph LR;
-    subgraph Edge / Hardware
-        Sensor[IoT Sensor / Device] -->|MQTT| Gateway[Edge Gateway]
+    subgraph Vehicle / Edge
+        Mic[Microphone] --> STT[Local Speech-to-Text]
+        STT --> Router[Command Router]
+        Router --> Intent[Intent Detection]
+        Intent --> VehicleAPI[Vehicle API / Simulator]
+        VehicleAPI --> TTS[Local Text-to-Speech]
     end
-    
-    subgraph Cloud / Backend
-        Gateway -->|Data Ingestion| API[AWS API Gateway]
-        API <--> DB[(MongoDB)]
-        API <--> ML[AI/ML Model]
+
+    subgraph Cloud / Online Services
+        Router --> CloudAI[Cloud LLM / AI Services]
+        CloudAI --> Router
     end
-    
-    subgraph Client / UI
-        API -->|REST / GraphQL| App[Web / Mobile Dashboard]
+
+    subgraph Demo UI
+        Router --> Dashboard[Monitoring / Demo Dashboard]
     end
+```
