@@ -13,7 +13,7 @@
 
 | Name | GitHub Handle | Role(s) |
 | :--- | :--- | :--- |
-| Abdulla | TBD | Development |
+| Abdulla | TBD | Web & Mobile Development |
 | Alex | TBD | Frontend, Backend |
 | Christian | TBD | Backend, Software Architecture, ML/CV |
 | Li | TBD | Product Design, UX, Product Journey |
