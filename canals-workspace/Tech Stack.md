@@ -1,40 +1,56 @@
 # Tech Stack
 
-## Edge (In-Vehicle)
+## Vehicle (Local / Edge)
 
 | Component | Technology |
 |-----------|-----------|
 | Hardware | NVIDIA Jetson |
-| Speech-to-Text | Picovoice Rino (on-device) |
-| Local LLM | Edge model (offline) |
-| Cache | MongoDB |
+| Speech-to-Intent | Picovoice Rhino (on-device) |
+| Local LLM | Ollama · Gemma 4 (offline) |
+| Route Cache | MongoDB (mongodb-atlas-local, Docker) |
 | Text-to-Speech | On-device TTS |
+| Vehicle Control | KUKSA / Vehicle API |
 
-## Cloud (When Connected)
+## AWS
 
 | Component | Technology |
 |-----------|-----------|
-| Cloud LLM | AWS Bedrock |
-| Maps / POI | Open Maps API |
-| Infrastructure | AWS |
+| Cloud LLM Agent | AWS Lambda / Agent |
+| Model | AWS Bedrock · GPT-OSS |
+
+## Open Services
+
+| Component | Technology |
+|-----------|-----------|
+| Routing | OSRM / OpenStreetMap |
+| EV Data | OpenChargeMap REST API |
+
+## MongoDB (Canals)
+
+| Component | Technology |
+|-----------|-----------|
+| Cloud Database | MongoDB Atlas |
+| Vector Search | Atlas Vector Search |
 
 ## Data Flow
 
 ```mermaid
 flowchart TD
-    Voice["🎙️ Voice Input"] --> STT["Picovoice Rino<br>(Speech-to-Text)"]
-    STT --> LLM["Local LLM<br>(NVIDIA Jetson)"]
+    Voice["🎙️ Voice Input<br>Picovoice Rhino"] --> LLM["Local LLM<br>Ollama · Gemma 4"]
 
     LLM --> Check{Connected?}
 
-    Check -- Yes --> CloudLLM["AWS Bedrock<br>(Cloud LLM)"]
-    CloudLLM --> Maps["Open Maps API"]
-    Maps --> TTS
+    Check -- Yes --> CloudLLM["Cloud LLM Agent<br>(AWS Lambda)"]
+    CloudLLM --> Bedrock["AWS Bedrock<br>GPT-OSS"]
+    CloudLLM --> OSM["OSRM<br>OpenStreetMap"]
+    CloudLLM --> OCM["OpenChargeMap API"]
+    CloudLLM --> Atlas[("MongoDB Atlas")]
 
-    Check -- No --> Cache[("MongoDB Cache<br>(Offline POIs)")]
+    Check -- No --> Cache[("Route Cache<br>MongoDB local")]
+
     Cache --> TTS["🔊 Text-to-Speech"]
-
     CloudLLM --> TTS
+
     TTS --> Driver["👤 Driver"]
 ```
 
@@ -43,3 +59,4 @@ flowchart TD
 - [[Challenge]]
 - [[Problem]]
 - [[Use Case]]
+- [[Cache Requirements]]
