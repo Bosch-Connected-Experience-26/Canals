@@ -13,3 +13,9 @@ db:
 
 db-stop:
     docker compose down
+
+orchestrator:
+    docker compose up --build orchestrator
+
+api:
+    cd backend/orchestrator && uvicorn app.main:app --reload --port 8000

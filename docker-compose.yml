@@ -1,4 +1,23 @@
 services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.orchestrator
+    image: canals-orchestrator
+    container_name: canals-orchestrator
+    ports:
+      - "8001:8000"
+    environment:
+      - MONGODB_URI=mongodb://root:root@mongodb:27017/?authSource=admin
+      - MONGODB_DATABASE=canals
+      - MONGODB_COLLECTION=journey_caches
+      - AWS_REGION=eu-central-1
+      - AWS_BEDROCK_ENABLED=false
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
   mongodb:
     build:
       context: ./Docker

@@ -7,6 +7,7 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         vehicleSystem = softwareSystem "Vehicle (Local)" "Hybrid edge voice assistant running in-vehicle." {
             voiceInput = container "Voice Input" "Captures and interprets driver speech intent." "Picovoice Rhino"
             localLLM   = container "Local LLM" "Processes intents and answers queries offline." "Ollama · Gemma 4 (NVIDIA Jetson)"
+            orchestrator = container "Orchestration API" "Central backend service that coordinates routing, cache lookup, cloud calls, vehicle state, and navigation actions." "Python + FastAPI"
             routeCache = container "Route Cache" "Stores pre-fetched POIs for the current journey." "MongoDB (mongodb-atlas-local)" {
                 tags "Database" "MongoDB"
             }
@@ -45,14 +46,17 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
 
         # Voice pipeline
         voiceInput -> localLLM  "Transcribed intent"
-        localLLM   -> tts       "Response text"
+        localLLM   -> orchestrator "Router decision + command context"
+        orchestrator -> localLLM "Local answer request when needed"
+        orchestrator -> tts "Response text"
         localLLM   -> vehicleAPI "Vehicle commands (lights, climate)"
+        orchestrator -> vehicleAPI "Navigation / vehicle actions"
 
         # Offline path
-        localLLM -> routeCache "Query nearby POIs (offline)"
+        orchestrator -> routeCache "Query cached EV stations (offline)"
 
         # Online path: Vehicle → AWS
-        localLLM -> cloudLLM "Forward query (when connected)"
+        orchestrator -> cloudLLM "Forward live/current-data query (when connected)"
         cloudLLM -> bedrock  "Invoke model"
 
         # AWS → Open Services
@@ -61,6 +65,7 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
 
         # AWS → MongoDB
         cloudLLM -> atlasDB "Semantic + geo query"
+        cloudLLM -> orchestrator "Live availability / pricing result"
 
         # Cache population at journey start
         osmRouting -> routeCache "Store route waypoints"
@@ -102,9 +107,10 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         dynamic vehicleSystem "OfflineFlow" "Driver query answered from local cache" {
             driver     -> voiceInput "Where is the nearest EV charger?"
             voiceInput -> localLLM   "Intent: find_ev_charger"
-            localLLM   -> routeCache "Nearby EV stations (offline)"
-            routeCache -> localLLM   "Station list with positions"
-            localLLM   -> tts        "EV station in 2.3 km"
+            localLLM   -> orchestrator "local_cache_search decision"
+            orchestrator -> routeCache "Nearby EV stations (offline)"
+            routeCache -> orchestrator "Station list with positions"
+            orchestrator -> tts        "EV station in 2.3 km"
             tts        -> driver     "EV station in 2.3 km, turn left"
             autolayout lr
             title "Offline Flow — EV Query from Cache"
@@ -113,12 +119,13 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         dynamic vehicleSystem "OnlineFlow" "Driver query enriched by cloud" {
             driver     -> voiceInput "Find me water and a charger"
             voiceInput -> localLLM   "Intent: find_ev_charger + shop"
-            localLLM   -> cloudLLM   "Query (connected)"
+            localLLM   -> orchestrator "cloud_required decision"
+            orchestrator -> cloudLLM   "Query (connected)"
             cloudLLM   -> bedrock    "Invoke model"
             cloudLLM   -> ocmAPI     "Live charger availability"
             cloudLLM   -> atlasDB    "Vector search: EV + shop nearby"
-            cloudLLM   -> localLLM   "Rich result"
-            localLLM   -> tts        "4 chargers free, shop 200m"
+            cloudLLM   -> orchestrator "Rich result"
+            orchestrator -> tts        "4 chargers free, shop 200m"
             tts        -> driver     "4 of 6 chargers free, shop 200m ahead"
             autolayout lr
             title "Online Flow — Enriched Query via Cloud"

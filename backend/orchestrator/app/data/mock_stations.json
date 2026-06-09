@@ -1,0 +1,116 @@
+[
+  {
+    "id": "berlin_fast_coffee_01",
+    "name": "Canals FastCharge Coffee Mitte",
+    "lat": 52.535,
+    "lng": 13.42,
+    "distanceKm": 18.4,
+    "detourKm": 1.8,
+    "maxKw": 300,
+    "connectors": ["CCS", "Type2"],
+    "amenities": ["coffee", "restroom", "wifi", "snacks"],
+    "reliability": 0.96,
+    "cachedAvailability": {
+      "status": "high",
+      "availableStalls": 5,
+      "totalStalls": 8,
+      "source": "cached"
+    },
+    "priceEurPerKwh": 0.59
+  },
+  {
+    "id": "potsdam_hpc_02",
+    "name": "Havel HPC Park",
+    "lat": 52.392,
+    "lng": 13.087,
+    "distanceKm": 42.1,
+    "detourKm": 3.4,
+    "maxKw": 250,
+    "connectors": ["CCS"],
+    "amenities": ["coffee", "restaurant", "restroom"],
+    "reliability": 0.91,
+    "cachedAvailability": {
+      "status": "medium",
+      "availableStalls": 2,
+      "totalStalls": 6,
+      "source": "cached"
+    },
+    "priceEurPerKwh": 0.54
+  },
+  {
+    "id": "a10_services_03",
+    "name": "A10 Services UltraCharge",
+    "lat": 52.31,
+    "lng": 13.59,
+    "distanceKm": 58.7,
+    "detourKm": 0.7,
+    "maxKw": 350,
+    "connectors": ["CCS", "CHAdeMO"],
+    "amenities": ["restroom", "restaurant", "shop"],
+    "reliability": 0.88,
+    "cachedAvailability": {
+      "status": "low",
+      "availableStalls": 1,
+      "totalStalls": 10,
+      "source": "cached"
+    },
+    "priceEurPerKwh": 0.66
+  },
+  {
+    "id": "spree_green_04",
+    "name": "Spree Green Charge",
+    "lat": 52.48,
+    "lng": 13.33,
+    "distanceKm": 12.6,
+    "detourKm": 2.2,
+    "maxKw": 150,
+    "connectors": ["CCS", "Type2"],
+    "amenities": ["coffee", "playground", "restroom"],
+    "reliability": 0.83,
+    "cachedAvailability": {
+      "status": "high",
+      "availableStalls": 3,
+      "totalStalls": 4,
+      "source": "cached"
+    },
+    "priceEurPerKwh": 0.49
+  },
+  {
+    "id": "legacy_type2_05",
+    "name": "Old Town AC Charge",
+    "lat": 52.5,
+    "lng": 13.37,
+    "distanceKm": 9.8,
+    "detourKm": 1.1,
+    "maxKw": 22,
+    "connectors": ["Type2"],
+    "amenities": ["coffee", "shopping"],
+    "reliability": 0.79,
+    "cachedAvailability": {
+      "status": "medium",
+      "availableStalls": 4,
+      "totalStalls": 6,
+      "source": "cached"
+    },
+    "priceEurPerKwh": 0.39
+  },
+  {
+    "id": "forest_stop_06",
+    "name": "Forest Stop FastCharge",
+    "lat": 52.04,
+    "lng": 13.74,
+    "distanceKm": 118.5,
+    "detourKm": 6.3,
+    "maxKw": 180,
+    "connectors": ["CCS"],
+    "amenities": ["restroom", "picnic"],
+    "reliability": 0.93,
+    "cachedAvailability": {
+      "status": "unknown",
+      "availableStalls": null,
+      "totalStalls": 4,
+      "source": "cached"
+    },
+    "priceEurPerKwh": 0.57
+  }
+]
