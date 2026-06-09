@@ -8,6 +8,8 @@ from fastapi import FastAPI, HTTPException
 from .cache import JourneyCacheStore
 from .cloud import CloudGateway
 from .config import load_settings
+from .local_ai import LocalAIRouter
+from .maps_client import MapsApiClient
 from .models import (
     CommandAction,
     CommandDebug,
@@ -20,7 +22,6 @@ from .models import (
     RouteLabel,
 )
 from .ranking import rank_stations
-from .router import decide_route
 
 app = FastAPI(
     title="Canals EV Voice Orchestrator",
@@ -30,6 +31,8 @@ app = FastAPI(
 settings = load_settings()
 store = JourneyCacheStore(settings)
 cloud_gateway = CloudGateway(settings)
+local_router = LocalAIRouter(settings)
+maps_client = MapsApiClient(settings)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -62,13 +65,16 @@ def command(request: CommandRequest) -> CommandResponse:
     if not cache:
         cache = store.create_or_load(request.journeyId)
 
-    decision = decide_route(request)
+    decision = local_router.decide(request)
     warnings: List[str] = []
     cloud_used = False
     stale_warning = None
 
     if cache.metadata.age_minutes >= 15:
         stale_warning = f"Cached charger data is {cache.metadata.age_minutes} minutes old."
+
+    if decision.intent == "plan_journey":
+        return _handle_plan_journey(request, decision, cache)
 
     if decision.route == RouteLabel.local_simple:
         return _handle_local_simple(request, decision, cache)
@@ -80,10 +86,16 @@ def command(request: CommandRequest) -> CommandResponse:
 
         ranked = rank_stations(cache, decision.constraints, request.vehicle, stale_warning)
 
-        if decision.route == RouteLabel.cloud_required and request.network.online:
+        if (
+            decision.route == RouteLabel.cloud_required
+            and request.network.online
+            and settings.aws_bedrock_enabled
+        ):
             cloud_used = True
             ranked, cloud_warnings = cloud_gateway.enrich_live_availability(ranked)
             warnings.extend(cloud_warnings)
+        elif decision.route == RouteLabel.cloud_required:
+            warnings.append("Live cloud enrichment is disabled for this local demo; using cached station data.")
 
         if not ranked:
             spoken = "I could not find a reachable cached charger that matches those constraints."
@@ -130,6 +142,55 @@ def command(request: CommandRequest) -> CommandResponse:
     )
 
 
+def _handle_plan_journey(request: CommandRequest, decision, cache: JourneyCache) -> CommandResponse:
+    if not decision.origin or not decision.destination:
+        return CommandResponse(
+            route=RouteLabel.clarify,
+            spokenResponse="Where should I plan the journey from and to?",
+            intent=decision.intent,
+            debug=_debug(decision, cache, False, ["Missing origin or destination."]),
+        )
+
+    warnings: List[str] = []
+    cloud_used = False
+    try:
+        cache = maps_client.build_journey_cache(
+            journey_id=request.journeyId,
+            origin=decision.origin,
+            destination=decision.destination,
+            vehicle=request.vehicle,
+        )
+        store.replace(cache)
+    except Exception as exc:
+        warnings.append(
+            f"maps-api was unavailable, so I kept the existing local cache: {exc.__class__.__name__}."
+        )
+
+    spoken = (
+        f"I planned the journey from {decision.origin} to {decision.destination} "
+        f"and cached {cache.metadata.stationCount} charging stations for offline use."
+    )
+    return CommandResponse(
+        route=RouteLabel.local_simple,
+        spokenResponse=spoken,
+        intent=decision.intent,
+        actions=[
+            CommandAction(
+                type="journey_cache_created",
+                label="Cached charging stations",
+                payload={
+                    "journeyId": request.journeyId,
+                    "origin": decision.origin,
+                    "destination": decision.destination,
+                    "stationCount": cache.metadata.stationCount,
+                    "source": cache.metadata.source,
+                },
+            )
+        ],
+        debug=_debug(decision, cache, cloud_used, warnings),
+    )
+
+
 def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache) -> CommandResponse:
     if decision.intent == "navigate_selected_station":
         station = store.get_last_selected(request.journeyId)
@@ -169,9 +230,7 @@ def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache)
 
 def _spoken_station_response(station, route: RouteLabel, stale_warning: Optional[str]) -> str:
     prefix = ""
-    if route == RouteLabel.cloud_required:
-        prefix = "Using live availability, "
-    elif route == RouteLabel.offline_fallback:
+    if route == RouteLabel.offline_fallback:
         prefix = "I cannot check live data right now, but from the cache, "
 
     amenity_text = ""
