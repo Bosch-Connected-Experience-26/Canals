@@ -45,6 +45,21 @@ services:
     container_name: canals-maps-api
     ports:
       - "8000:8000"
+    environment:
+      - OCM_API_KEY=${OCM_API_KEY:-}
+    restart: unless-stopped
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.e2e
+    container_name: canals-e2e
+    profiles:
+      - test
+    depends_on:
+      - maps-api
+    environment:
+      - MAPS_API_URL=http://maps-api:8000
 
 volumes:
   mongodb-data:

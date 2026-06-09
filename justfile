@@ -8,6 +8,9 @@ structurizr:
 maps-api:
     docker compose up -d maps-api
 
+test:
+    docker compose --profile test run --rm e2e
+
 db:
     docker compose up -d
 

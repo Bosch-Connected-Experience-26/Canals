@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 import math
+import os
 
 app = FastAPI(
     title="Canals Route Proxy",
@@ -20,6 +21,7 @@ app.add_middleware(
 OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
 OCM_URL = "https://api.openchargemap.io/v3/poi/"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+OCM_API_KEY = os.getenv("OCM_API_KEY", "")
 
 
 class Coordinate(BaseModel):
@@ -161,12 +163,14 @@ async def get_ev_stations(
         "compact": "true",
         "verbose": "false",
     }
+    if OCM_API_KEY:
+        params["key"] = OCM_API_KEY
 
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(OCM_URL, params=params)
 
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="OpenChargeMap request failed")
+        raise HTTPException(status_code=502, detail=f"OpenChargeMap error {resp.status_code}: {resp.text}")
 
     stations = []
     for poi in resp.json():
