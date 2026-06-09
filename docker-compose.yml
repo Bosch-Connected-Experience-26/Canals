@@ -53,7 +53,19 @@ services:
       - mongodb-mongot:/data/mongot
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--username", "root", "--password", "root", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--username",
+          "root",
+          "--password",
+          "root",
+          "--authenticationDatabase",
+          "admin",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -111,9 +123,13 @@ services:
   bosch-car-mock:
     image: ghcr.io/eclipse-kuksa/kuksa-databroker:main
     container_name: canals-bosch-car-mock
-    command: --insecure
+    command: --insecure --vss /data/vss_bosch.json
     ports:
       - "55556:55555"
+    volumes:
+      - ./Docker/vss_bosch.json:/data/vss_bosch.json
+    environment:
+      - RUST_LOG=databroker::broker=debug,databroker::grpc::kuksa_val_v2=debug
     restart: unless-stopped
 
   e2e:
@@ -126,9 +142,11 @@ services:
     depends_on:
       - maps-api
       - cache-service
+      - car-api
     environment:
       - MAPS_API_URL=http://maps-api:8000
       - CACHE_SERVICE_URL=http://cache-service:8002
+      - CAR_API_URL=http://car-api:8003
 
 volumes:
   mongodb-data:
