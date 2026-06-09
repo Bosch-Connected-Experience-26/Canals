@@ -9,7 +9,10 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         # ── Vehicle (Edge) ──────────────────────────────────────────────────
         vehicleSystem = softwareSystem "Vehicle (Local)" "Hybrid edge voice assistant running in-vehicle." {
             voiceInput   = container "Voice Input" "Captures and interprets driver speech intent." "Picovoice Rhino"
-            localLLM     = container "Local LLM" "Processes intents and answers queries offline." "Ollama · Gemma 4 (NVIDIA Jetson)"
+            localLLM     = container "Local LLM" "Processes intents and answers queries offline. Switchable: Ollama (local) or AWS Bedrock (cloud) via USE_OLLAMA_ROUTER flag." "Ollama · llama3.2 / AWS Bedrock"
+            ollamaService = container "Ollama" "Local LLM server serving llama3.2:3b for offline intent routing. Optional profile: --profile ollama." "Ollama · Docker (profile: ollama)" {
+                tags "API"
+            }
             orchestrator = container "Orchestration API" "Central backend service that coordinates routing, cache lookup, cloud calls, vehicle state, and navigation actions." "Python · FastAPI" {
                 tags "API"
             }
@@ -57,7 +60,7 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             boschCarMock = container "KUKSA Databroker Mock" "Mock KUKSA databroker for local development. Logs all VSS signal writes, no hardware required." "ghcr.io/eclipse-kuksa/kuksa-databroker · Docker" {
                 tags "Mock"
             }
-            e2eTests = container "E2E Tests" "12 automated end-to-end tests: 5 Maps API (geocode, route, EV stations) + 7 Cache Service (journey CRUD, nearby offline). Frankfurt → Munich." "Python · pytest · httpx · Docker" {
+            e2eTests = container "E2E Tests" "15 automated end-to-end tests: 5 Maps API (geocode, route, EV stations) + 8 Cache Service (journey CRUD, nearest offline) + 2 Car API (lights on/off via KUKSA mock). Frankfurt → Berlin." "Python · pytest · httpx · Docker" {
                 tags "Tests"
             }
         }
@@ -72,6 +75,7 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         voiceInput   -> localLLM     "Transcribed intent"
         localLLM     -> orchestrator "Router decision + command context"
         orchestrator -> localLLM     "Local answer request when needed"
+        orchestrator -> ollamaService "LLM inference (USE_OLLAMA_ROUTER=true)"
         orchestrator -> tts          "Response text"
         localLLM     -> vehicleAPI   "Vehicle commands (lights, climate)"
         orchestrator -> vehicleAPI   "Navigation / vehicle actions"
@@ -108,7 +112,8 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         # E2E Tests
         developer    -> e2eTests     "Runs tests"
         e2eTests     -> mapsAPI      "HTTP requests (geocode, route, EV stations)"
-        e2eTests     -> cacheService "HTTP requests (POST /journey, GET /journey/*, GET /nearby)"
+        e2eTests     -> cacheService "HTTP requests (POST /journey, GET /journey/*, GET /nearest)"
+        e2eTests     -> carAPI       "HTTP requests (POST /lights/on, POST /lights/off)"
     }
 
     views {
@@ -155,21 +160,25 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             title "Local Mock Run — Light Control via KUKSA Mock"
         }
 
-        dynamic canalsAPI "E2EFlow" "E2E test: Frankfurt → Munich route" {
+        dynamic canalsAPI "E2EFlow" "E2E test: Frankfurt → Berlin route + car lights" {
             developer    -> e2eTests    "just test"
             e2eTests     -> mapsAPI     "GET /geocode?location=Frankfurt"
-            e2eTests     -> mapsAPI     "GET /geocode?location=Munich"
-            e2eTests     -> mapsAPI     "GET /route/cities?start=Frankfurt&end=Munich"
+            e2eTests     -> mapsAPI     "GET /geocode?location=Berlin"
+            e2eTests     -> mapsAPI     "GET /route/cities?start=Frankfurt&end=Berlin"
             mapsAPI      -> osmRouting  "Geocode city names + OSRM GPS path"
             e2eTests     -> mapsAPI     "GET /route/ev-stations"
             mapsAPI      -> ocmAPI      "EV stations along waypoints"
-            e2eTests     -> cacheService "POST /journey (Frankfurt → Munich, radius 10 km)"
+            e2eTests     -> cacheService "POST /journey (Frankfurt → Berlin, radius 10 km)"
             cacheService -> mapsAPI     "GET /route/cities + GET /route/ev-stations"
             cacheService -> routeCache  "Upsert POIs (2dsphere indexed)"
             e2eTests     -> cacheService "GET /journey/{id}/pois"
-            e2eTests     -> cacheService "GET /nearby?lat=50.11&lng=8.68&radius_m=15000"
+            e2eTests     -> cacheService "GET /nearest?lat=51.34&lng=12.37&poi_type=ev_charging"
+            e2eTests     -> carAPI      "POST /lights/on"
+            carAPI       -> boschCarMock "gRPC: RequestTakeOver + ExteriorLightControl=[1,5,120]"
+            e2eTests     -> carAPI      "POST /lights/off"
+            carAPI       -> boschCarMock "gRPC: ExteriorLightControl=[0,0,120]"
             autolayout lr
-            title "E2E Flow — Frankfurt → Munich"
+            title "E2E Flow — Frankfurt → Berlin + Car Lights (15 tests)"
         }
 
         dynamic vehicleSystem "OfflineFlow" "Driver query answered from local cache" {
