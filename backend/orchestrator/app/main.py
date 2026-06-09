@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from typing import List, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .car_client import CarApiClient
@@ -100,6 +102,9 @@ def command(request: CommandRequest) -> CommandResponse:
             ranked, cloud_warnings = cloud_gateway.enrich_live_availability(ranked)
             warnings.extend(cloud_warnings)
 
+        _MAP_TRIGGERS = ("map", "where are", "locations", "nearby", "around me", "show me")
+        wants_map = any(w in request.transcript.lower() for w in _MAP_TRIGGERS)
+
         if not ranked:
             spoken = "I could not find a reachable cached charger that matches those constraints."
             actions: List[CommandAction] = []
@@ -118,6 +123,8 @@ def command(request: CommandRequest) -> CommandResponse:
                     payload={"lat": selected.lat, "lng": selected.lng},
                 )
             ]
+            if wants_map:
+                actions.append(CommandAction(type="show_map", label="Show charger map"))
 
         return CommandResponse(
             route=decision.route,
@@ -292,3 +299,30 @@ def _debug(decision, cache: JourneyCache, cloud_used: bool, warnings: List[str])
         warnings=warnings,
         routerDecision=decision,
     )
+
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)) -> dict:
+    """Transcribe audio using OpenAI Whisper. Requires OPENAI_API_KEY env var."""
+    try:
+        import openai  # lazy import — gracefully absent if not installed
+
+        audio_bytes = await file.read()
+        suffix = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            client = openai.OpenAI()
+            with open(tmp_path, "rb") as f:
+                result = client.audio.transcriptions.create(model="whisper-1", file=f)
+        finally:
+            os.unlink(tmp_path)
+
+        return {"text": result.text}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="openai package not installed. Run: pip install openai")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

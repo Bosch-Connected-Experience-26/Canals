@@ -1,0 +1,481 @@
+---
+// Orchestrator base URL — Docker Compose exposes it on 8001; direct uvicorn uses 8000
+const API_BASE = "http://localhost:8001";
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canals · Voice Control</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #080810;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 2rem;
+      border-bottom: 1px solid #1a1a2e;
+    }
+
+    .logo { font-size: 1rem; letter-spacing: 0.25em; text-transform: uppercase; color: #aaa; font-weight: 500; }
+    .logo span { color: #fff; }
+
+    /* Online/offline toggle */
+    .network-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #666;
+      cursor: pointer;
+      user-select: none;
+    }
+    .network-toggle input { display: none; }
+    .toggle-pill {
+      width: 36px; height: 20px;
+      background: #333;
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .toggle-pill::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px; left: 3px;
+      transition: left 0.2s;
+    }
+    .network-toggle input:checked + .toggle-pill { background: #4caf50; }
+    .network-toggle input:checked + .toggle-pill::after { left: 19px; }
+    .network-label { min-width: 3.5rem; }
+
+    /* ── Main ── */
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2.5rem;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Vehicle state bar ── */
+    .vehicle-bar {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .vehicle-bar label { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+    .vehicle-bar input[type=range] { width: 90px; accent-color: #e02020; }
+    .vehicle-bar .val { color: #aaa; font-size: 0.85rem; }
+
+    /* ── Button ring ── */
+    .ring {
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: box-shadow 0.3s;
+    }
+    .ring.idle   { box-shadow: 0 0 0 3px #fff, 0 0 0 7px #121220; }
+    .ring.active { box-shadow: 0 0 0 3px #e02020, 0 0 40px 10px rgba(224,32,32,0.35); animation: pulse 1.3s ease-in-out infinite; }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 3px #e02020, 0 0 40px 10px rgba(224,32,32,0.35); }
+      50%      { box-shadow: 0 0 0 3px #e02020, 0 0 65px 22px rgba(224,32,32,0.18); }
+    }
+
+    #voiceBtn {
+      width: 162px; height: 162px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      transition: background 0.22s, color 0.22s, transform 0.1s;
+    }
+    #voiceBtn.idle      { background: #ffffff; color: #080810; }
+    #voiceBtn.recording { background: #e02020; color: #ffffff; }
+    #voiceBtn:active    { transform: scale(0.96); }
+    .btn-icon { font-size: 1.9rem; line-height: 1; }
+
+    /* ── Status ── */
+    #status {
+      font-size: 0.82rem;
+      letter-spacing: 0.12em;
+      color: #555;
+      min-height: 1.1em;
+      text-transform: uppercase;
+      transition: color 0.25s;
+    }
+    #status.recording  { color: #e05555; }
+    #status.processing { color: #f0b429; }
+    #status.done       { color: #4caf50; }
+    #status.error      { color: #e02020; }
+
+    /* ── Result cards ── */
+    .cards {
+      width: min(560px, 92vw);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .card {
+      background: #0f0f1c;
+      border: 1px solid #1e1e30;
+      border-radius: 12px;
+      padding: 1rem 1.3rem;
+    }
+    .card-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #444;
+      margin-bottom: 0.45rem;
+    }
+    .card-body {
+      font-size: 0.97rem;
+      line-height: 1.6;
+      color: #ccc;
+      min-height: 1.4em;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .card-body.placeholder { color: #2a2a3c; font-style: italic; }
+
+    /* route badge */
+    .route-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      background: #1a1a2e;
+      color: #888;
+      margin-top: 0.35rem;
+    }
+    .route-badge.local_simple        { color: #4caf50; border: 1px solid #2d4d2d; }
+    .route-badge.local_cache_search  { color: #64b5f6; border: 1px solid #1a2d44; }
+    .route-badge.cloud_required      { color: #f0b429; border: 1px solid #4d3d0a; }
+    .route-badge.offline_fallback    { color: #ff8a65; border: 1px solid #4d2a15; }
+    .route-badge.clarify             { color: #ce93d8; border: 1px solid #3a1f4d; }
+    .route-badge.unsupported         { color: #ef9a9a; border: 1px solid #4d1a1a; }
+
+    /* ── Map card ── */
+    #map-wrap {
+      width: min(560px, 92vw);
+      display: none;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #map-wrap .card-label { font-size: 0.65rem; letter-spacing: 0.22em; text-transform: uppercase; color: #444; }
+    #map { height: 320px; border-radius: 12px; overflow: hidden; }
+
+    .leaflet-popup-content-wrapper { background: #0f0f1c; color: #ccc; border: 1px solid #1e1e30; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
+    .leaflet-popup-tip { background: #0f0f1c; }
+    .leaflet-popup-content b { color: #fff; }
+    .leaflet-popup-content em { color: #666; font-size: 0.85em; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      color: #2a2a3a;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>Canals</span> · Voice Control</div>
+  <label class="network-toggle" title="Toggle online/offline">
+    <input type="checkbox" id="onlineToggle" checked />
+    <span class="toggle-pill"></span>
+    <span class="network-label" id="networkLabel">Online</span>
+  </label>
+</header>
+
+<main>
+
+  <!-- Vehicle mock state -->
+  <div class="vehicle-bar">
+    <label>
+      Battery
+      <input type="range" id="battery" min="5" max="100" value="34" />
+      <span class="val"><span id="batteryVal">34</span>%</span>
+    </label>
+    <label>
+      Range
+      <input type="range" id="range" min="10" max="500" value="145" step="5" />
+      <span class="val"><span id="rangeVal">145</span> km</span>
+    </label>
+  </div>
+
+  <!-- Mic button -->
+  <div class="ring idle" id="ring">
+    <button id="voiceBtn" class="idle">
+      <span class="btn-icon" id="btnIcon">🎤</span>
+      <span id="btnLabel">Start</span>
+    </button>
+  </div>
+
+  <div id="status">Ready</div>
+
+  <!-- Result area -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Transcript (Whisper)</div>
+      <div class="card-body placeholder" id="transcript">Say something after pressing Start…</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Assistant Response</div>
+      <div class="card-body placeholder" id="response">Response will appear here…</div>
+      <div id="routeBadge" class="route-badge" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Map revealed when backend returns show_map action -->
+  <div id="map-wrap">
+    <div class="card-label">Nearby Chargers</div>
+    <div id="map"></div>
+  </div>
+
+</main>
+
+<footer>Canals · Bosch Connected Experience 2026</footer>
+
+<script define:vars={{ API_BASE }}>
+  // ── State
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let isRecording   = false;
+  let journeyId     = 'trip_' + Math.random().toString(36).slice(2, 10);
+  let leafletMap    = null;
+  let markers       = [];
+
+  // ── DOM refs
+  const ring        = document.getElementById('ring');
+  const btn         = document.getElementById('voiceBtn');
+  const btnIcon     = document.getElementById('btnIcon');
+  const btnLabel    = document.getElementById('btnLabel');
+  const statusEl    = document.getElementById('status');
+  const transcriptEl= document.getElementById('transcript');
+  const responseEl  = document.getElementById('response');
+  const routeBadge  = document.getElementById('routeBadge');
+  const onlineToggle= document.getElementById('onlineToggle');
+  const networkLabel= document.getElementById('networkLabel');
+  const batteryInput= document.getElementById('battery');
+  const rangeInput  = document.getElementById('range');
+  const batteryVal  = document.getElementById('batteryVal');
+  const rangeVal    = document.getElementById('rangeVal');
+
+  // ── Slider live labels
+  batteryInput.addEventListener('input', () => batteryVal.textContent = batteryInput.value);
+  rangeInput.addEventListener('input',   () => rangeVal.textContent   = rangeInput.value);
+
+  // ── Network toggle
+  onlineToggle.addEventListener('change', () => {
+    networkLabel.textContent = onlineToggle.checked ? 'Online' : 'Offline';
+  });
+
+  // ── Bootstrap journey
+  fetch(`${API_BASE}/journey/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ journeyId }),
+  }).catch(() => {}); // non-blocking; fails gracefully if backend is down
+
+  // ── Button
+  btn.addEventListener('click', async () => {
+    if (!isRecording) await startRecording();
+    else               stopRecording();
+  });
+
+  function setUI(state) {
+    isRecording = state === 'recording';
+    btn.className  = isRecording ? 'recording' : 'idle';
+    ring.className = isRecording ? 'ring active' : 'ring idle';
+    btnIcon.textContent  = isRecording ? '⏹' : '🎤';
+    btnLabel.textContent = isRecording ? 'Stop' : 'Start';
+  }
+
+  function setStatus(text, cls = '') {
+    statusEl.textContent = text;
+    statusEl.className   = cls;
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks  = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        await processAudio();
+      };
+      mediaRecorder.start();
+      setUI('recording');
+      setStatus('Listening…', 'recording');
+    } catch {
+      setStatus('Mic access denied', 'error');
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder?.state !== 'inactive') {
+      mediaRecorder.stop();
+      setUI('idle');
+      setStatus('Transcribing…', 'processing');
+    }
+  }
+
+  async function processAudio() {
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const form = new FormData();
+    form.append('file', blob, 'recording.webm');
+
+    let transcript = '';
+    try {
+      // 1. Transcribe with Whisper
+      const tRes  = await fetch(`${API_BASE}/transcribe`, { method: 'POST', body: form });
+      if (!tRes.ok) throw new Error(`Transcribe failed: ${tRes.status}`);
+      const tData = await tRes.json();
+      transcript  = tData.text ?? '';
+
+      transcriptEl.textContent = transcript || '(empty)';
+      transcriptEl.classList.remove('placeholder');
+      setStatus('Processing command…', 'processing');
+    } catch (err) {
+      setStatus('Transcription error: ' + err.message, 'error');
+      return;
+    }
+
+    try {
+      // 2. Send transcript to orchestrator
+      const cRes  = await fetch(`${API_BASE}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          journeyId,
+          transcript,
+          network: { online: onlineToggle.checked },
+          vehicle: {
+            batteryPercent: Number(batteryInput.value),
+            rangeKm:        Number(rangeInput.value),
+            lat: 52.52,
+            lng: 13.405,
+            connector: 'CCS',
+          },
+        }),
+      });
+      if (!cRes.ok) throw new Error(`Command failed: ${cRes.status}`);
+      const cData = await cRes.json();
+
+      responseEl.textContent = cData.spokenResponse ?? JSON.stringify(cData);
+      responseEl.classList.remove('placeholder');
+
+      // Route badge
+      if (cData.route) {
+        routeBadge.textContent = cData.route.replace(/_/g, ' ');
+        routeBadge.className   = 'route-badge ' + cData.route;
+        routeBadge.style.display = 'inline-block';
+      }
+
+      // Show map if backend signals show_map intent
+      if (cData.actions?.some(a => a.type === 'show_map')) {
+        showMap(cData.selectedStation, cData.alternatives ?? []);
+      }
+
+      // Speak the response aloud
+      const utterance = new SpeechSynthesisUtterance(cData.spokenResponse);
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
+
+      setStatus('Done', 'done');
+    } catch (err) {
+      setStatus('Command error: ' + err.message, 'error');
+    }
+  }
+
+  function showMap(selected, alternatives) {
+    const wrap = document.getElementById('map-wrap');
+    wrap.style.display = 'flex';
+
+    setTimeout(() => {
+      if (!leafletMap) {
+        leafletMap = L.map('map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 18,
+        }).addTo(leafletMap);
+      } else {
+        leafletMap.invalidateSize();
+      }
+
+      markers.forEach(m => m.remove());
+      markers = [];
+      const bounds = [];
+
+      if (selected) {
+        const m = L.circleMarker([selected.lat, selected.lng], {
+          radius: 12, color: '#22c55e', fillColor: '#16a34a', fillOpacity: 0.9, weight: 2,
+        }).addTo(leafletMap);
+        m.bindPopup(`<b>${selected.name}</b><br>${selected.maxKw} kW · ${selected.cachedAvailability.status} availability<br><em>Best match</em>`).openPopup();
+        markers.push(m);
+        bounds.push([selected.lat, selected.lng]);
+      }
+
+      for (const s of alternatives) {
+        const m = L.circleMarker([s.lat, s.lng], {
+          radius: 9, color: '#3b82f6', fillColor: '#2563eb', fillOpacity: 0.75, weight: 2,
+        }).addTo(leafletMap);
+        m.bindPopup(`<b>${s.name}</b><br>${s.maxKw} kW · ${s.cachedAvailability.status} availability`);
+        markers.push(m);
+        bounds.push([s.lat, s.lng]);
+      }
+
+      if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40] });
+    }, 50);
+  }
+</script>
+
+</body>
+</html>

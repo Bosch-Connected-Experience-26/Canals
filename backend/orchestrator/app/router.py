@@ -7,6 +7,7 @@ from .models import CommandRequest, RouteLabel, RouterConstraints, RouterDecisio
 
 FAST_WORDS = {"fast", "rapid", "hpc", "ultra", "quick", "150", "250", "300", "350"}
 CHARGER_WORDS = {"charger", "charging", "charge", "station", "plug"}
+MAP_WORDS = {"map", "where are", "locations", "nearby", "around me", "show me"}
 LIVE_WORDS = {
     "available",
     "availability",
@@ -82,6 +83,7 @@ def decide_route(request: CommandRequest) -> RouterDecision:
 
     requires_web = _contains_any(transcript, LIVE_WORDS)
     mentions_charging = _contains_any(transcript, CHARGER_WORDS) or "reach" in transcript
+    mentions_map = _contains_any(transcript, MAP_WORDS)
 
     if requires_web and request.network.online:
         return RouterDecision(
@@ -103,10 +105,10 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             reason="The request needs live data, but the network is offline, so cached data must be used with a freshness warning.",
         )
 
-    if mentions_charging:
+    if mentions_charging or mentions_map:
         return RouterDecision(
             route=RouteLabel.local_cache_search,
-            intent="find_charger",
+            intent="find_charger_map" if mentions_map else "find_charger",
             constraints=constraints,
             confidence=0.92,
             reason="The request can be answered from cached charging station data.",
