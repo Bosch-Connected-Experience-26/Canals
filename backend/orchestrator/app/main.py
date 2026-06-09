@@ -95,6 +95,9 @@ def command(request: CommandRequest) -> CommandResponse:
             ranked, cloud_warnings = cloud_gateway.enrich_live_availability(ranked)
             warnings.extend(cloud_warnings)
 
+        _MAP_TRIGGERS = ("map", "where are", "locations", "nearby", "around me", "show me")
+        wants_map = any(w in request.transcript.lower() for w in _MAP_TRIGGERS)
+
         if not ranked:
             spoken = "I could not find a reachable cached charger that matches those constraints."
             actions: List[CommandAction] = []
@@ -113,6 +116,8 @@ def command(request: CommandRequest) -> CommandResponse:
                     payload={"lat": selected.lat, "lng": selected.lng},
                 )
             ]
+            if wants_map:
+                actions.append(CommandAction(type="show_map", label="Show charger map"))
 
         return CommandResponse(
             route=decision.route,

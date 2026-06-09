@@ -9,6 +9,8 @@ const API_BASE = "http://localhost:8001";
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Canals · Voice Control</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -191,6 +193,21 @@ const API_BASE = "http://localhost:8001";
     .route-badge.clarify             { color: #ce93d8; border: 1px solid #3a1f4d; }
     .route-badge.unsupported         { color: #ef9a9a; border: 1px solid #4d1a1a; }
 
+    /* ── Map card ── */
+    #map-wrap {
+      width: min(560px, 92vw);
+      display: none;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #map-wrap .card-label { font-size: 0.65rem; letter-spacing: 0.22em; text-transform: uppercase; color: #444; }
+    #map { height: 320px; border-radius: 12px; overflow: hidden; }
+
+    .leaflet-popup-content-wrapper { background: #0f0f1c; color: #ccc; border: 1px solid #1e1e30; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
+    .leaflet-popup-tip { background: #0f0f1c; }
+    .leaflet-popup-content b { color: #fff; }
+    .leaflet-popup-content em { color: #666; font-size: 0.85em; }
+
     /* ── Footer ── */
     footer {
       text-align: center;
@@ -252,6 +269,12 @@ const API_BASE = "http://localhost:8001";
     </div>
   </div>
 
+  <!-- Map revealed when backend returns show_map action -->
+  <div id="map-wrap">
+    <div class="card-label">Nearby Chargers</div>
+    <div id="map"></div>
+  </div>
+
 </main>
 
 <footer>Canals · Bosch Connected Experience 2026</footer>
@@ -262,6 +285,8 @@ const API_BASE = "http://localhost:8001";
   let audioChunks   = [];
   let isRecording   = false;
   let journeyId     = 'trip_' + Math.random().toString(36).slice(2, 10);
+  let leafletMap    = null;
+  let markers       = [];
 
   // ── DOM refs
   const ring        = document.getElementById('ring');
@@ -392,10 +417,63 @@ const API_BASE = "http://localhost:8001";
         routeBadge.style.display = 'inline-block';
       }
 
+      // Show map if backend signals show_map intent
+      if (cData.actions?.some(a => a.type === 'show_map')) {
+        showMap(cData.selectedStation, cData.alternatives ?? []);
+      }
+
+      // Speak the response aloud
+      const utterance = new SpeechSynthesisUtterance(cData.spokenResponse);
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
+
       setStatus('Done', 'done');
     } catch (err) {
       setStatus('Command error: ' + err.message, 'error');
     }
+  }
+
+  function showMap(selected, alternatives) {
+    const wrap = document.getElementById('map-wrap');
+    wrap.style.display = 'flex';
+
+    setTimeout(() => {
+      if (!leafletMap) {
+        leafletMap = L.map('map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 18,
+        }).addTo(leafletMap);
+      } else {
+        leafletMap.invalidateSize();
+      }
+
+      markers.forEach(m => m.remove());
+      markers = [];
+      const bounds = [];
+
+      if (selected) {
+        const m = L.circleMarker([selected.lat, selected.lng], {
+          radius: 12, color: '#22c55e', fillColor: '#16a34a', fillOpacity: 0.9, weight: 2,
+        }).addTo(leafletMap);
+        m.bindPopup(`<b>${selected.name}</b><br>${selected.maxKw} kW · ${selected.cachedAvailability.status} availability<br><em>Best match</em>`).openPopup();
+        markers.push(m);
+        bounds.push([selected.lat, selected.lng]);
+      }
+
+      for (const s of alternatives) {
+        const m = L.circleMarker([s.lat, s.lng], {
+          radius: 9, color: '#3b82f6', fillColor: '#2563eb', fillOpacity: 0.75, weight: 2,
+        }).addTo(leafletMap);
+        m.bindPopup(`<b>${s.name}</b><br>${s.maxKw} kW · ${s.cachedAvailability.status} availability`);
+        markers.push(m);
+        bounds.push([s.lat, s.lng]);
+      }
+
+      if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40] });
+    }, 50);
   }
 </script>
 
