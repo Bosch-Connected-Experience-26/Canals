@@ -3,92 +3,123 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
     model {
         driver = person "Driver" "Interacts with the vehicle via voice while driving."
 
-        vehicleSystem = softwareSystem "Vehicle System" "Hybrid edge/cloud voice assistant running in the vehicle." {
-
+        # ── Vehicle (Edge) ──────────────────────────────────────────────────
+        vehicleSystem = softwareSystem "Vehicle (Local)" "Hybrid edge voice assistant running in-vehicle." {
             voiceInput = container "Voice Input" "Captures and interprets driver speech intent." "Picovoice Rhino"
-            localLLM = container "Local LLM" "Processes intents and answers queries offline." "Ollama · Gemma 4 (NVIDIA Jetson)"
-            routeCache = container "Route Cache" "Stores pre-fetched POIs for the current journey." "MongoDB (Docker / mongodb-atlas-local)" {
+            localLLM   = container "Local LLM" "Processes intents and answers queries offline." "Ollama · Gemma 4 (NVIDIA Jetson)"
+            routeCache = container "Route Cache" "Stores pre-fetched POIs for the current journey." "MongoDB (mongodb-atlas-local)" {
                 tags "Database" "MongoDB"
             }
-            tts = container "Text To Speech" "Converts assistant response to audio." "On-device TTS"
+            tts        = container "Text To Speech" "Converts assistant response to audio." "On-device TTS"
             vehicleAPI = container "Vehicle Control API" "Controls vehicle functions (lights, climate)." "KUKSA / Vehicle API"
         }
 
-        cloudSystem = softwareSystem "Cloud System" "Online services used when connectivity is available." "External" {
+        # ── AWS ─────────────────────────────────────────────────────────────
+        awsSystem = softwareSystem "AWS" "Cloud AI services, available when connected." {
             cloudLLM = container "Cloud LLM Agent" "Orchestrates cloud queries and enriches responses." "AWS Lambda / Agent" {
                 tags "AWS"
             }
-            bedrock = container "AWS Bedrock" "Hosts and runs the GPT-OSS model." "AWS Bedrock · GPT-OSS" {
+            bedrock  = container "AWS Bedrock" "Hosts and runs the GPT-OSS model." "AWS Bedrock · GPT-OSS" {
                 tags "AWS"
             }
+        }
+
+        # ── Open Services (OSM space) ────────────────────────────────────────
+        osmSystem = softwareSystem "Open Services" "Open routing and EV charging data." {
+            osmRouting = container "OSM Routing" "Generates road-accurate GPS paths between two points." "OSRM / OpenStreetMap"
+            ocmAPI     = container "OpenChargeMap API" "Provides EV charging station locations and live availability." "OpenChargeMap REST API"
+        }
+
+        # ── MongoDB Atlas (Canals space) ─────────────────────────────────────
+        mongoSystem = softwareSystem "MongoDB (Canals)" "Managed cloud database with full POI dataset and vector search." {
             atlasDB = container "MongoDB Atlas" "Full global POI dataset with vector search." "MongoDB Atlas" {
                 tags "Database" "MongoDB"
             }
-            externalAPIs = container "External APIs" "Live POI data sources." "OpenChargeMap, OpenStreetMap, Overpass"
         }
 
-        # People → Vehicle
-        driver -> voiceInput "Speaks query"
-        tts -> driver "Speaks response"
+        # ── Relationships ────────────────────────────────────────────────────
+
+        # Driver ↔ Vehicle
+        driver     -> voiceInput "Speaks query"
+        tts        -> driver     "Speaks response"
 
         # Voice pipeline
-        voiceInput -> localLLM "Transcribed intent"
-        localLLM -> tts "Response text"
-        localLLM -> vehicleAPI "Vehicle commands (lights, climate)"
+        voiceInput -> localLLM  "Transcribed intent"
+        localLLM   -> tts       "Response text"
+        localLLM   -> vehicleAPI "Vehicle commands (lights, climate)"
 
         # Offline path
         localLLM -> routeCache "Query nearby POIs (offline)"
 
-        # Online path
+        # Online path: Vehicle → AWS
         localLLM -> cloudLLM "Forward query (when connected)"
-        cloudLLM -> bedrock "Invoke model"
+        cloudLLM -> bedrock  "Invoke model"
+
+        # AWS → Open Services
+        cloudLLM -> osmRouting "Get GPS route path"
+        cloudLLM -> ocmAPI     "Fetch EV charging data"
+
+        # AWS → MongoDB
         cloudLLM -> atlasDB "Semantic + geo query"
-        cloudLLM -> externalAPIs "Live data lookup"
 
         # Cache population at journey start
-        externalAPIs -> routeCache "Pre-fetch route POIs at journey start"
-        atlasDB -> routeCache "Rich POI data at journey start"
+        osmRouting -> routeCache "Store route waypoints"
+        ocmAPI     -> routeCache "Store EV stations along route"
+        atlasDB    -> routeCache "Store enriched POI data"
     }
 
     views {
-        systemContext vehicleSystem "SystemContext" {
+        systemLandscape "Landscape" {
             include *
             autolayout lr
-            title "System Context — Hybrid Vehicle Voice Assistant"
+            title "System Landscape — Hybrid Vehicle Voice Assistant"
         }
 
         container vehicleSystem "VehicleContainers" {
             include *
             autolayout tb
-            title "Vehicle System — Containers"
+            title "Vehicle (Local) — Containers"
         }
 
-        container cloudSystem "CloudContainers" {
+        container awsSystem "AWSContainers" {
             include *
             autolayout tb
-            title "Cloud System — Containers"
+            title "AWS — Containers"
+        }
+
+        container osmSystem "OSMContainers" {
+            include *
+            autolayout tb
+            title "Open Services — Containers"
+        }
+
+        container mongoSystem "MongoContainers" {
+            include *
+            autolayout tb
+            title "MongoDB (Canals) — Containers"
         }
 
         dynamic vehicleSystem "OfflineFlow" "Driver query answered from local cache" {
-            driver -> voiceInput "Where is the nearest EV charger?"
-            voiceInput -> localLLM "Intent: find_ev_charger"
-            localLLM -> routeCache "Nearby EV stations (offline)"
-            routeCache -> localLLM "Station list with positions"
-            localLLM -> tts "EV station in 2.3 km"
-            tts -> driver "EV station in 2.3 km, turn left"
+            driver     -> voiceInput "Where is the nearest EV charger?"
+            voiceInput -> localLLM   "Intent: find_ev_charger"
+            localLLM   -> routeCache "Nearby EV stations (offline)"
+            routeCache -> localLLM   "Station list with positions"
+            localLLM   -> tts        "EV station in 2.3 km"
+            tts        -> driver     "EV station in 2.3 km, turn left"
             autolayout lr
             title "Offline Flow — EV Query from Cache"
         }
 
         dynamic vehicleSystem "OnlineFlow" "Driver query enriched by cloud" {
-            driver -> voiceInput "Find me water and a charger"
-            voiceInput -> localLLM "Intent: find_ev_charger + shop"
-            localLLM -> cloudLLM "Query (connected)"
-            cloudLLM -> atlasDB "Vector search: EV + shop nearby"
-            cloudLLM -> externalAPIs "Live charger availability"
-            cloudLLM -> localLLM "Rich result"
-            localLLM -> tts "4 chargers free, shop 200m"
-            tts -> driver "4 of 6 chargers free, shop 200m ahead"
+            driver     -> voiceInput "Find me water and a charger"
+            voiceInput -> localLLM   "Intent: find_ev_charger + shop"
+            localLLM   -> cloudLLM   "Query (connected)"
+            cloudLLM   -> bedrock    "Invoke model"
+            cloudLLM   -> ocmAPI     "Live charger availability"
+            cloudLLM   -> atlasDB    "Vector search: EV + shop nearby"
+            cloudLLM   -> localLLM   "Rich result"
+            localLLM   -> tts        "4 chargers free, shop 200m"
+            tts        -> driver     "4 of 6 chargers free, shop 200m ahead"
             autolayout lr
             title "Online Flow — Enriched Query via Cloud"
         }
@@ -111,10 +142,6 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             element "Database" {
                 shape Cylinder
                 background #438DD5
-                color #ffffff
-            }
-            element "External" {
-                background #999999
                 color #ffffff
             }
             element "AWS" {
