@@ -13,7 +13,7 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             orchestrator = container "Orchestration API" "Central backend service that coordinates routing, cache lookup, cloud calls, vehicle state, and navigation actions." "Python · FastAPI" {
                 tags "API"
             }
-            routeCache   = container "Route Cache" "Stores pre-fetched POIs for the current journey." "MongoDB (mongodb-atlas-local · Docker)" {
+            routeCache   = container "Route Cache" "Stores pre-fetched POIs for the current journey. Named volumes: db, configdb, mongot. 2dsphere + journey_id indexes." "MongoDB (mongodb-atlas-local · Docker)" {
                 tags "Database" "MongoDB"
             }
             tts          = container "Text To Speech" "Converts assistant response to audio." "On-device TTS"
@@ -44,11 +44,14 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         }
 
         # ── Canals API ───────────────────────────────────────────────────────
-        canalsAPI = softwareSystem "Canals API" "Our backend services: Maps API proxy and e2e tests." {
+        canalsAPI = softwareSystem "Canals API" "Our backend services: Maps API proxy, cache builder, and e2e tests." {
             mapsAPI = container "Maps API" "REST proxy for geocoding, routing and EV data. Swagger UI at /docs." "Python · FastAPI · Docker" {
                 tags "API"
             }
-            e2eTests = container "E2E Tests" "Automated end-to-end tests for the Maps API (Frankfurt → Munich route)." "Python · httpx · Docker" {
+            cacheService = container "Cache Service" "Fetches POIs along a route and stores them in local MongoDB. Swagger UI at /docs." "Python · FastAPI · Docker" {
+                tags "API"
+            }
+            e2eTests = container "E2E Tests" "12 automated end-to-end tests: 5 Maps API (geocode, route, EV stations) + 7 Cache Service (journey CRUD, nearby offline). Frankfurt → Munich." "Python · pytest · httpx · Docker" {
                 tags "Tests"
             }
         }
@@ -78,16 +81,21 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         cloudLLM     -> atlasDB      "Semantic + geo query"
         cloudLLM     -> orchestrator "Live availability / pricing result"
 
-        # Cache population at journey start via Maps API
-        localLLM     -> mapsAPI      "Fetch route + EV data at journey start"
+        # Cache population at journey start via Cache Service
+        localLLM     -> cacheService "POST /journey at journey start"
+        cacheService -> mapsAPI      "GET /route/cities + /ev-stations"
         mapsAPI      -> osmRouting   "Geocode city names + get GPS route (OSRM)"
         mapsAPI      -> ocmAPI       "Fetch EV stations along route"
-        mapsAPI      -> routeCache   "Store waypoints + POIs"
+        cacheService -> routeCache   "Upsert POIs (2dsphere indexed)"
         atlasDB      -> routeCache   "Store enriched POI data"
+
+        # Offline nearby query
+        orchestrator -> cacheService "GET /nearby?lat=&lng= (offline)"
 
         # E2E Tests
         developer    -> e2eTests     "Runs tests"
         e2eTests     -> mapsAPI      "HTTP requests (geocode, route, EV stations)"
+        e2eTests     -> cacheService "HTTP requests (POST /journey, GET /journey/*, GET /nearby)"
     }
 
     views {
@@ -128,13 +136,18 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         }
 
         dynamic canalsAPI "E2EFlow" "E2E test: Frankfurt → Munich route" {
-            developer -> e2eTests   "just test"
-            e2eTests  -> mapsAPI    "GET /geocode?location=Frankfurt"
-            e2eTests  -> mapsAPI    "GET /geocode?location=Munich"
-            e2eTests  -> mapsAPI    "GET /route/cities?start=Frankfurt&end=Munich"
-            e2eTests  -> mapsAPI    "GET /route/ev-stations"
-            mapsAPI   -> osmRouting "Geocode + OSRM route"
-            mapsAPI   -> ocmAPI     "EV stations along waypoints"
+            developer    -> e2eTests    "just test"
+            e2eTests     -> mapsAPI     "GET /geocode?location=Frankfurt"
+            e2eTests     -> mapsAPI     "GET /geocode?location=Munich"
+            e2eTests     -> mapsAPI     "GET /route/cities?start=Frankfurt&end=Munich"
+            mapsAPI      -> osmRouting  "Geocode city names + OSRM GPS path"
+            e2eTests     -> mapsAPI     "GET /route/ev-stations"
+            mapsAPI      -> ocmAPI      "EV stations along waypoints"
+            e2eTests     -> cacheService "POST /journey (Frankfurt → Munich, radius 10 km)"
+            cacheService -> mapsAPI     "GET /route/cities + GET /route/ev-stations"
+            cacheService -> routeCache  "Upsert POIs (2dsphere indexed)"
+            e2eTests     -> cacheService "GET /journey/{id}/pois"
+            e2eTests     -> cacheService "GET /nearby?lat=50.11&lng=8.68&radius_m=15000"
             autolayout lr
             title "E2E Flow — Frankfurt → Munich"
         }

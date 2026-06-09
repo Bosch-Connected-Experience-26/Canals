@@ -31,18 +31,21 @@ MONGODB_URI  = os.getenv("MONGODB_URI", "mongodb://root:root@mongodb:27017/?auth
 DB_NAME      = os.getenv("MONGODB_DATABASE", "route_cache")
 COLLECTION   = os.getenv("MONGODB_COLLECTION", "pois")
 
-mongo: MongoClient = None
-pois: Collection   = None
+mongo: MongoClient    = None
+pois: Collection      = None
+journeys: Collection  = None
 
 
 @app.on_event("startup")
 def startup():
-    global mongo, pois
-    mongo = MongoClient(MONGODB_URI)
-    pois  = mongo[DB_NAME][COLLECTION]
+    global mongo, pois, journeys
+    mongo    = MongoClient(MONGODB_URI)
+    pois     = mongo[DB_NAME][COLLECTION]
+    journeys = mongo[DB_NAME]["journeys"]
     pois.create_index([("location", GEOSPHERE)])
     pois.create_index([("journey_id", 1)])
     pois.create_index([("source_id", 1), ("poi_type", 1)], unique=True, sparse=True)
+    journeys.create_index([("journey_id", 1)], unique=True)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -144,13 +147,19 @@ async def create_journey_cache(req: JourneyRequest):
             )
             stored += 1
 
+    now = datetime.now(timezone.utc).isoformat()
+    journeys.update_one(
+        {"journey_id": journey_id},
+        {"$set": {"journey_id": journey_id, "start": req.start, "end": req.end, "created_at": now}},
+        upsert=True,
+    )
     return JourneyStatus(
         journey_id=journey_id,
         start=req.start,
         end=req.end,
         poi_count=stored,
         status="complete",
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=now,
     )
 
 
@@ -162,16 +171,17 @@ async def create_journey_cache(req: JourneyRequest):
 )
 def get_journey(journey_id: str):
     """Returns POI count and metadata for a cached journey."""
+    meta  = journeys.find_one({"journey_id": journey_id}, {"_id": 0})
     count = pois.count_documents({"journey_id": journey_id})
-    if count == 0:
+    if meta is None and count == 0:
         raise HTTPException(status_code=404, detail="Journey not found")
     return JourneyStatus(
         journey_id=journey_id,
-        start="",
-        end="",
+        start=meta.get("start", "") if meta else "",
+        end=meta.get("end", "") if meta else "",
         poi_count=count,
         status="complete",
-        created_at="",
+        created_at=meta.get("created_at", "") if meta else "",
     )
 
 
@@ -209,8 +219,9 @@ def list_pois(journey_id: str, poi_type: Optional[str] = None):
     tags=["Journey"],
 )
 def delete_journey(journey_id: str):
-    """Removes all cached POIs for the given journey_id."""
+    """Removes all cached POIs and journey metadata for the given journey_id."""
     result = pois.delete_many({"journey_id": journey_id})
+    journeys.delete_one({"journey_id": journey_id})
     return {"journey_id": journey_id, "deleted": result.deleted_count}
 
 
