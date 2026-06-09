@@ -40,5 +40,9 @@ demo-nearest:
 orchestrator:
     docker compose up --build orchestrator
 
+ollama-pull:
+    docker compose up -d ollama
+    docker compose exec ollama ollama pull llama3.2:3b
+
 api:
     cd backend/orchestrator && uvicorn app.main:app --reload --port 8000

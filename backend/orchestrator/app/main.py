@@ -8,6 +8,8 @@ from fastapi import FastAPI, HTTPException
 from .cache import JourneyCacheStore
 from .cloud import CloudGateway
 from .config import load_settings
+from .local_ai import LocalAIRouter
+from .maps_client import MapsApiClient
 from .models import (
     CommandAction,
     CommandDebug,
@@ -20,7 +22,6 @@ from .models import (
     RouteLabel,
 )
 from .ranking import rank_stations
-from .router import decide_route
 
 app = FastAPI(
     title="Canals EV Voice Orchestrator",
@@ -30,6 +31,8 @@ app = FastAPI(
 settings = load_settings()
 store = JourneyCacheStore(settings)
 cloud_gateway = CloudGateway(settings)
+local_router = LocalAIRouter(settings)
+maps_client = MapsApiClient(settings)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -62,13 +65,16 @@ def command(request: CommandRequest) -> CommandResponse:
     if not cache:
         cache = store.create_or_load(request.journeyId)
 
-    decision = decide_route(request)
+    decision = local_router.decide(request)
     warnings: List[str] = []
     cloud_used = False
     stale_warning = None
 
     if cache.metadata.age_minutes >= 15:
         stale_warning = f"Cached charger data is {cache.metadata.age_minutes} minutes old."
+
+    if decision.intent == "plan_journey":
+        return _handle_plan_journey(request, decision, cache)
 
     if decision.route == RouteLabel.local_simple:
         return _handle_local_simple(request, decision, cache)
@@ -127,6 +133,55 @@ def command(request: CommandRequest) -> CommandResponse:
         spokenResponse="I can help with EV charging search, charger availability, and navigation to a selected charger.",
         intent=decision.intent,
         debug=_debug(decision, cache, False, warnings),
+    )
+
+
+def _handle_plan_journey(request: CommandRequest, decision, cache: JourneyCache) -> CommandResponse:
+    if not decision.origin or not decision.destination:
+        return CommandResponse(
+            route=RouteLabel.clarify,
+            spokenResponse="Where should I plan the journey from and to?",
+            intent=decision.intent,
+            debug=_debug(decision, cache, False, ["Missing origin or destination."]),
+        )
+
+    warnings: List[str] = []
+    cloud_used = False
+    try:
+        cache = maps_client.build_journey_cache(
+            journey_id=request.journeyId,
+            origin=decision.origin,
+            destination=decision.destination,
+            vehicle=request.vehicle,
+        )
+        store.replace(cache)
+    except Exception as exc:
+        warnings.append(
+            f"maps-api was unavailable, so I kept the existing local cache: {exc.__class__.__name__}."
+        )
+
+    spoken = (
+        f"I planned the journey from {decision.origin} to {decision.destination} "
+        f"and cached {cache.metadata.stationCount} charging stations for offline use."
+    )
+    return CommandResponse(
+        route=RouteLabel.local_simple,
+        spokenResponse=spoken,
+        intent=decision.intent,
+        actions=[
+            CommandAction(
+                type="journey_cache_created",
+                label="Cached charging stations",
+                payload={
+                    "journeyId": request.journeyId,
+                    "origin": decision.origin,
+                    "destination": decision.destination,
+                    "stationCount": cache.metadata.stationCount,
+                    "source": cache.metadata.source,
+                },
+            )
+        ],
+        debug=_debug(decision, cache, cloud_used, warnings),
     )
 
 

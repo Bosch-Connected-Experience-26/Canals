@@ -8,16 +8,34 @@ services:
     ports:
       - "8001:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - MONGODB_URI=mongodb://root:root@mongodb:27017/?authSource=admin
       - MONGODB_DATABASE=canals
       - MONGODB_COLLECTION=journey_caches
+      - MAPS_API_BASE_URL=http://maps-api:8000
+      - USE_OLLAMA_ROUTER=${USE_OLLAMA_ROUTER:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
       - AWS_REGION=eu-central-1
       - AWS_BEDROCK_ENABLED=false
     depends_on:
       mongodb:
         condition: service_healthy
+      maps-api:
+        condition: service_started
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: canals-ollama
+    profiles:
+      - ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
     restart: unless-stopped
 
   mongodb:
@@ -49,7 +67,8 @@ services:
     ports:
       - "8002:8002"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - MAPS_API_URL=http://maps-api:8000
       - MONGODB_URI=mongodb://root:root@mongodb:27017/?authSource=admin
@@ -81,7 +100,8 @@ services:
     ports:
       - "8003:8003"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - VEHICLE_URL=bosch-car-mock:55555
     depends_on:
@@ -114,3 +134,4 @@ volumes:
   mongodb-data:
   mongodb-configdb:
   mongodb-mongot:
+  ollama-data:
