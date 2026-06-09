@@ -1,0 +1,4 @@
+Type 2
+CCS Combo 2
+Type 1
+CHAdeMO

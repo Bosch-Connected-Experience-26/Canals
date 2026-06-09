@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from app import database as db
-from app.maps import fetch_waypoints, fetch_ev_stations, build_poi_doc
+from app.maps import fetch_waypoints, fetch_ev_stations, build_poi_doc, build_cloud_poi_doc
 from app.models import JourneyRequest, JourneyStatus, PoiSummary
 
 router = APIRouter(tags=["Journey"])
@@ -38,12 +38,28 @@ async def create_journey_cache(req: JourneyRequest):
             )
             stored += 1
 
+            if db.cloud_pois is not None:
+                try:
+                    cloud_doc = build_cloud_poi_doc(doc)
+                    db.cloud_pois.update_one(
+                        {"source_id": cloud_doc["source_id"], "poi_type": "ev_charging"},
+                        {"$set": cloud_doc},
+                        upsert=True,
+                    )
+                except Exception:
+                    pass
+
     now = datetime.now(timezone.utc).isoformat()
-    db.journeys.update_one(
-        {"journey_id": journey_id},
-        {"$set": {"journey_id": journey_id, "start": req.start, "end": req.end, "created_at": now}},
-        upsert=True,
-    )
+    journey_meta = {"journey_id": journey_id, "start": req.start, "end": req.end, "created_at": now}
+    db.journeys.update_one({"journey_id": journey_id}, {"$set": journey_meta}, upsert=True)
+
+    if db.cloud_journeys is not None:
+        try:
+            db.cloud_journeys.update_one(
+                {"journey_id": journey_id}, {"$set": journey_meta}, upsert=True
+            )
+        except Exception:
+            pass
     return JourneyStatus(
         journey_id=journey_id,
         start=req.start,
