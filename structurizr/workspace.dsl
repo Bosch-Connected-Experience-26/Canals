@@ -44,12 +44,18 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         }
 
         # ── Canals API ───────────────────────────────────────────────────────
-        canalsAPI = softwareSystem "Canals API" "Our backend services: Maps API proxy, cache builder, and e2e tests." {
+        canalsAPI = softwareSystem "Canals API" "Our backend services: Maps API proxy, cache builder, car control API, and e2e tests." {
             mapsAPI = container "Maps API" "REST proxy for geocoding, routing and EV data. Swagger UI at /docs." "Python · FastAPI · Docker" {
                 tags "API"
             }
             cacheService = container "Cache Service" "Fetches POIs along a route and stores them in local MongoDB. Swagger UI at /docs." "Python · FastAPI · Docker" {
                 tags "API"
+            }
+            carAPI = container "Car API" "REST API for vehicle control commands (lights, etc.). Swagger UI at /docs." "Python · FastAPI · Docker" {
+                tags "API"
+            }
+            boschCarMock = container "KUKSA Databroker Mock" "Mock KUKSA databroker for local development. Logs all VSS signal writes, no hardware required." "ghcr.io/eclipse-kuksa/kuksa-databroker · Docker" {
+                tags "Mock"
             }
             e2eTests = container "E2E Tests" "12 automated end-to-end tests: 5 Maps API (geocode, route, EV stations) + 7 Cache Service (journey CRUD, nearby offline). Frankfurt → Munich." "Python · pytest · httpx · Docker" {
                 tags "Tests"
@@ -92,6 +98,13 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
         # Offline nearby query
         orchestrator -> cacheService "GET /nearby?lat=&lng= (offline)"
 
+        # Car API → vehicle (production path uses real KUKSA broker)
+        developer    -> carAPI       "POST /lights/on|off (Swagger UI)"
+        carAPI       -> vehicleAPI   "KUKSA gRPC set_current_values"
+
+        # Car API → mock (local dev)
+        carAPI       -> boschCarMock "KUKSA gRPC set_current_values (mock)"
+
         # E2E Tests
         developer    -> e2eTests     "Runs tests"
         e2eTests     -> mapsAPI      "HTTP requests (geocode, route, EV stations)"
@@ -133,6 +146,13 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             include *
             autolayout tb
             title "Canals API — Containers"
+        }
+
+        dynamic canalsAPI "LocalMockRun" "Developer controls vehicle via mock KUKSA broker" {
+            developer    -> carAPI        "POST /lights/off"
+            carAPI       -> boschCarMock  "gRPC: Vehicle.Body.Lights.ExteriorLightControl"
+            autolayout lr
+            title "Local Mock Run — Light Control via KUKSA Mock"
         }
 
         dynamic canalsAPI "E2EFlow" "E2E test: Frankfurt → Munich route" {
@@ -218,6 +238,11 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             element "API" {
                 shape Component
                 background #2D6A4F
+                color #ffffff
+            }
+            element "Mock" {
+                shape Component
+                background #8B4513
                 color #ffffff
             }
             element "Tests" {
