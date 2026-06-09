@@ -1,0 +1,23 @@
+services:
+  mongodb:
+    build:
+      context: ./Docker
+      dockerfile: Dockerfile.mongodb
+    image: route-cache-mongodb
+    container_name: route-cache-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=root
+      - MONGODB_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - mongodb-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb-data:
