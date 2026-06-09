@@ -19,11 +19,9 @@ services:
     restart: unless-stopped
 
   mongodb:
-    build:
-      context: ./Docker
-      dockerfile: Dockerfile.mongodb
-    image: route-cache-mongodb
+    image: mongodb/mongodb-atlas-local:latest
     container_name: route-cache-mongodb
+    hostname: mongodb
     ports:
       - "27017:27017"
     environment:
@@ -31,12 +29,36 @@ services:
       - MONGODB_INITDB_ROOT_PASSWORD=root
     volumes:
       - mongodb-data:/data/db
+      - mongodb-configdb:/data/configdb
+      - mongodb-mongot:/data/mongot
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--username", "root", "--password", "root", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  cache-service:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.cache-service
+    container_name: canals-cache-service
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      - MAPS_API_URL=http://maps-api:8000
+      - MONGODB_URI=mongodb://root:root@mongodb:27017/?authSource=admin
+      - MONGODB_DATABASE=route_cache
+      - MONGODB_COLLECTION=pois
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      maps-api:
+        condition: service_started
+    restart: unless-stopped
 
   maps-api:
     build:
@@ -58,8 +80,12 @@ services:
       - test
     depends_on:
       - maps-api
+      - cache-service
     environment:
       - MAPS_API_URL=http://maps-api:8000
+      - CACHE_SERVICE_URL=http://cache-service:8002
 
 volumes:
   mongodb-data:
+  mongodb-configdb:
+  mongodb-mongot:

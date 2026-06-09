@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY e2e/ .
 
-CMD ["python3", "test_route.py"]
+CMD ["python3", "-m", "pytest", "-v", "--tb=short"]

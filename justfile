@@ -5,10 +5,14 @@ structurizr:
         structurizr/structurizr local
 
 
+cache-service:
+    docker compose up -d --build cache-service
+
 maps-api:
     docker compose up -d maps-api
 
 test:
+    docker compose up -d mongodb maps-api cache-service
     docker compose --profile test run --rm e2e
 
 db:
