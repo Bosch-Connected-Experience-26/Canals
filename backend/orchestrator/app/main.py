@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from typing import List, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
 from .cache import JourneyCacheStore
 from .cloud import CloudGateway
@@ -26,6 +29,13 @@ app = FastAPI(
     title="Canals EV Voice Orchestrator",
     description="Offline-aware orchestration API for EV charging voice control.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 settings = load_settings()
 store = JourneyCacheStore(settings)
@@ -196,3 +206,30 @@ def _debug(decision, cache: JourneyCache, cloud_used: bool, warnings: List[str])
         warnings=warnings,
         routerDecision=decision,
     )
+
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)) -> dict:
+    """Transcribe audio using OpenAI Whisper. Requires OPENAI_API_KEY env var."""
+    try:
+        import openai  # lazy import — gracefully absent if not installed
+
+        audio_bytes = await file.read()
+        suffix = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            client = openai.OpenAI()
+            with open(tmp_path, "rb") as f:
+                result = client.audio.transcriptions.create(model="whisper-1", file=f)
+        finally:
+            os.unlink(tmp_path)
+
+        return {"text": result.text}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="openai package not installed. Run: pip install openai")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
