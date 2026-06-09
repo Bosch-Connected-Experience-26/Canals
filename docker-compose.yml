@@ -73,6 +73,21 @@ services:
       - OCM_API_KEY=${OCM_API_KEY:-}
     restart: unless-stopped
 
+  car-api:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.car-api
+    container_name: canals-car-api
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    environment:
+      - VEHICLE_URL=bosch-car-mock:55555
+    depends_on:
+      - bosch-car-mock
+    restart: unless-stopped
+
   bosch-car-mock:
     image: ghcr.io/eclipse-kuksa/kuksa-databroker:main
     container_name: canals-bosch-car-mock
