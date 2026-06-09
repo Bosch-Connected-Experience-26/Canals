@@ -1,7 +1,7 @@
 structurizr:
     docker run -it --rm \
         -p 8080:8080 \
-        -v {{justfile_directory()}}:/usr/local/structurizr \
+        -v {{justfile_directory()}}/structurizr:/usr/local/structurizr \
         structurizr/structurizr local
 
 

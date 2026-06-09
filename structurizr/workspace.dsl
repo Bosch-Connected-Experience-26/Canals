@@ -5,19 +5,24 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
 
         vehicleSystem = softwareSystem "Vehicle System" "Hybrid edge/cloud voice assistant running in the vehicle." {
 
-            voiceInput = container "Voice Input" "Captures driver speech." "Picovoice Rino"
-            localLLM = container "Local LLM" "Processes intents and answers queries offline." "Edge LLM (NVIDIA Jetson)"
+            voiceInput = container "Voice Input" "Captures and interprets driver speech intent." "Picovoice Rhino"
+            localLLM = container "Local LLM" "Processes intents and answers queries offline." "Ollama · Gemma 4 (NVIDIA Jetson)"
             routeCache = container "Route Cache" "Stores pre-fetched POIs for the current journey." "MongoDB (Docker / mongodb-atlas-local)" {
-                tags "Database"
+                tags "Database" "MongoDB"
             }
             tts = container "Text To Speech" "Converts assistant response to audio." "On-device TTS"
             vehicleAPI = container "Vehicle Control API" "Controls vehicle functions (lights, climate)." "KUKSA / Vehicle API"
         }
 
         cloudSystem = softwareSystem "Cloud System" "Online services used when connectivity is available." "External" {
-            cloudLLM = container "Cloud LLM" "Enriches responses with live data." "AWS Bedrock"
+            cloudLLM = container "Cloud LLM Agent" "Orchestrates cloud queries and enriches responses." "AWS Lambda / Agent" {
+                tags "AWS"
+            }
+            bedrock = container "AWS Bedrock" "Hosts and runs the GPT-OSS model." "AWS Bedrock · GPT-OSS" {
+                tags "AWS"
+            }
             atlasDB = container "MongoDB Atlas" "Full global POI dataset with vector search." "MongoDB Atlas" {
-                tags "Database"
+                tags "Database" "MongoDB"
             }
             externalAPIs = container "External APIs" "Live POI data sources." "OpenChargeMap, OpenStreetMap, Overpass"
         }
@@ -36,6 +41,7 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
 
         # Online path
         localLLM -> cloudLLM "Forward query (when connected)"
+        cloudLLM -> bedrock "Invoke model"
         cloudLLM -> atlasDB "Semantic + geo query"
         cloudLLM -> externalAPIs "Live data lookup"
 
@@ -110,6 +116,16 @@ workspace "Hybrid Vehicle Voice Assistant" "BCX26 — Voice Assistant for Vehicl
             element "External" {
                 background #999999
                 color #ffffff
+            }
+            element "AWS" {
+                background #FF9900
+                color #000000
+                icon "icons/bedrock.png"
+            }
+            element "MongoDB" {
+                background #47A248
+                color #ffffff
+                icon "icons/mongodb.png"
             }
             relationship "Relationship" {
                 dashed false
