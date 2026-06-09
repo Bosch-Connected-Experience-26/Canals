@@ -1,6 +1,6 @@
 # **Your Team at a Glance**
 
-## **Team Name / Tagline**
+## **Canals / Tagline**
 
 **TBD**  
 *Hybrid voice control for vehicles — local-first, cloud-optional.*
