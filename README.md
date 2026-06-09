@@ -21,7 +21,7 @@ Local-first. Cloud-optional. Always responsive.
 
 </div>
 
-## ✨ The Problem
+## The Problem
 
 Today's in-vehicle voice assistants are **entirely cloud-dependent**. Dead zones, highway tunnels, weak LTE — and your assistant goes silent. For an EV driver asking *"Where is the next charging port for my electric car?"* this isn't just inconvenient. It's a broken experience at exactly the wrong moment.
 
@@ -35,7 +35,7 @@ Today's in-vehicle voice assistants are **entirely cloud-dependent**. Dead zones
 
 ---
 
-## 🧠 The Canals Approach
+##  The Canals Approach 🧠
 
 ```
 "Show me fast chargers with coffee near me"
@@ -60,7 +60,7 @@ The **local model decides first, every time**. Cloud is only called when the use
 
 ---
 
-## 🗺️ System Architecture
+##  System Architecture 🗺️
 
 ```mermaid
 graph TB
@@ -107,7 +107,7 @@ graph TB
 
 ---
 
-## 🏗️ Data Model
+##  Data Model 🏗️
 
 ```mermaid
 erDiagram
@@ -177,7 +177,7 @@ erDiagram
 
 ---
 
-## 🔀 Voice Command Flow
+##  Voice Command Flow 🔀
 
 ```mermaid
 sequenceDiagram
@@ -203,7 +203,7 @@ sequenceDiagram
 
 ---
 
-## 🗂️ System Boundaries
+##  System Boundaries 🗂️
 
 ```mermaid
 graph LR
