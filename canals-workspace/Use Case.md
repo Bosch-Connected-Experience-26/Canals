@@ -8,15 +8,16 @@ Driver travels between cities (e.g. France → Germany) on a highway.
 
 ```mermaid
 flowchart LR
-    Start(["🚗 Journey Start"]) -->|online| Fetch["Fetch Route POIs<br>(Open Maps)"]
-    Fetch --> Cache[("MongoDB Cache")]
+    Start(["🚗 Journey Start"]) -->|online| Route["OSM Routing<br>(OSRM)"]
+    Route -->|GPS path| Fetch["Fetch POIs along route<br>OpenChargeMap + OSM"]
+    Fetch --> Cache[("Route Cache<br>MongoDB local")]
 
     Cache --> Drive["Driving"]
     Drive --> Query["Voice Query"]
 
     Query --> Check{Connected?}
-    Check -- Yes --> CloudLLM["Cloud LLM<br>+ Live Data"]
-    Check -- No --> LocalLLM["Local LLM<br>+ Cache"]
+    Check -- Yes --> CloudLLM["Cloud LLM Agent<br>AWS Bedrock · GPT-OSS"]
+    Check -- No --> LocalLLM["Local LLM<br>Ollama · Gemma 4"]
 
     CloudLLM --> Answer["🔊 Answer"]
     LocalLLM --> Answer
@@ -32,13 +33,14 @@ flowchart LR
 | "I need a place to sleep" | ✅ |
 | "Find a workshop / garage" | ✅ |
 | "Nearest hospital" | ✅ |
-| "Book a hotel" | ☁️ needs cloud |
+| "I need water / food nearby" | ☁️ online only |
+| "Book a hotel" | ☁️ online only |
 | Heart rate alert → suggest hospital | ✅ cached locations |
 
 ## Cached POI Categories
 
 - Gas stations
-- EV charging stations
+- EV charging stations (via OpenChargeMap)
 - Hotels / places to sleep
 - Workshops / car garages
 - Hospitals / emergency services
@@ -49,3 +51,4 @@ flowchart LR
 - [[Challenge]]
 - [[Problem]]
 - [[Tech Stack]]
+- [[Cache Requirements]]

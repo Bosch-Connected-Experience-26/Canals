@@ -1,0 +1,65 @@
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.orchestrator
+    image: canals-orchestrator
+    container_name: canals-orchestrator
+    ports:
+      - "8001:8000"
+    environment:
+      - MONGODB_URI=mongodb://root:root@mongodb:27017/?authSource=admin
+      - MONGODB_DATABASE=canals
+      - MONGODB_COLLECTION=journey_caches
+      - AWS_REGION=eu-central-1
+      - AWS_BEDROCK_ENABLED=false
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongodb:
+    build:
+      context: ./Docker
+      dockerfile: Dockerfile.mongodb
+    image: route-cache-mongodb
+    container_name: route-cache-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=root
+      - MONGODB_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - mongodb-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  maps-api:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.maps-api
+    container_name: canals-maps-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OCM_API_KEY=${OCM_API_KEY:-}
+    restart: unless-stopped
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.e2e
+    container_name: canals-e2e
+    profiles:
+      - test
+    depends_on:
+      - maps-api
+    environment:
+      - MAPS_API_URL=http://maps-api:8000
+
+volumes:
+  mongodb-data:
