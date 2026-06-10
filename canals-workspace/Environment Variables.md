@@ -67,7 +67,7 @@ AWS_BEDROCK_ENABLED=false
 | `MONGODB_DATABASE` | Yes | cache-service | Default: `route_cache` |
 | `MONGODB_COLLECTION` | Yes | cache-service | Default: `pois` |
 | `mongo_db_connection` | No | cache-service | Cloud Atlas URI — enables dual-write if set |
-| `VEHICLE_URL` | No | car-api | Format `host:port`. Docker overrides to `bosch-car-mock:55555` |
+| `VEHICLE_URL` | No | car-api | Format `host:port`. Defaults to `bosch-car-mock:55555` if unset, but `.env` value takes precedence |
 | `VEHICLE_CLIENT_ID` | No | car-api | Client ID sent with KUKSA commands (default `120`) |
 | `USE_OLLAMA_ROUTER` | No | orchestrator | `true` to route intents via local Ollama. Falls back to the rule router if Ollama is unreachable |
 | `OLLAMA_BASE_URL` | No | orchestrator | Only used when `USE_OLLAMA_ROUTER=true` |
@@ -92,11 +92,10 @@ Services that declare `env_file: .env` load all vars from the file, but `environ
 |---------|----------|--------|
 | `orchestrator` | `MONGODB_URI` → `mongodb:27017` | container can't reach `localhost` |
 | `cache-service` | `MONGODB_URI` → `mongodb:27017` | same |
-| `car-api` | `VEHICLE_URL` → `bosch-car-mock:55555` | always mock inside Docker |
 | `maps-api` | `OCM_API_KEY` → `${OCM_API_KEY:-}` | passes through from `.env` |
 | `ui` | `PUBLIC_API_BASE` → `http://localhost:8001` | browser calls host-exposed orchestrator |
 
-So `.env` values for `MONGODB_URI` and `VEHICLE_URL` are only used when running services **directly on the host** (e.g. `uvicorn` in dev), not inside Docker.
+`car-api`'s `VEHICLE_URL` uses `${VEHICLE_URL:-bosch-car-mock:55555}` — `.env` value passes through if set, defaults to the mock otherwise. So `.env` values for `MONGODB_URI` are only used when running services **directly on the host** (e.g. `uvicorn` in dev), not inside Docker — but `VEHICLE_URL` from `.env` is respected in both.
 
 ## Links
 
