@@ -1,6 +1,6 @@
 ---
 // Orchestrator base URL — Docker Compose exposes it on 8001; direct uvicorn uses 8000
-const API_BASE = "http://localhost:8001";
+const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
 ---
 
 <!DOCTYPE html>
@@ -91,6 +91,82 @@ const API_BASE = "http://localhost:8001";
     .vehicle-bar label { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
     .vehicle-bar input[type=range] { width: 90px; accent-color: #e02020; }
     .vehicle-bar .val { color: #aaa; font-size: 0.85rem; }
+
+    /* ── Journey cache planner ── */
+    .journey-panel {
+      width: min(720px, 94vw);
+      display: grid;
+      gap: 0.85rem;
+      padding: 1rem;
+      border: 1px solid #1e1e30;
+      background: #0d0d18;
+      border-radius: 8px;
+    }
+    .journey-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 0.7rem;
+      align-items: end;
+    }
+    .journey-form label {
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .journey-form input {
+      min-width: 0;
+      border: 1px solid #24243a;
+      border-radius: 6px;
+      background: #080810;
+      color: #eee;
+      padding: 0.68rem 0.75rem;
+      font: inherit;
+      letter-spacing: 0;
+    }
+    .journey-form button {
+      border: 1px solid #e02020;
+      border-radius: 6px;
+      background: #e02020;
+      color: #fff;
+      padding: 0.72rem 0.9rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .journey-form button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+    .cache-status {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+    .cache-stat {
+      border: 1px solid #1a1a2e;
+      border-radius: 6px;
+      padding: 0.65rem;
+      min-height: 64px;
+    }
+    .cache-stat .k {
+      color: #444;
+      font-size: 0.62rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .cache-stat .v {
+      color: #ccc;
+      font-size: 0.86rem;
+      line-height: 1.25;
+      word-break: break-word;
+    }
 
     /* ── Button ring ── */
     .ring {
@@ -195,13 +271,57 @@ const API_BASE = "http://localhost:8001";
 
     /* ── Map card ── */
     #map-wrap {
-      width: min(560px, 92vw);
+      width: min(720px, 94vw);
       display: none;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.75rem;
     }
     #map-wrap .card-label { font-size: 0.65rem; letter-spacing: 0.22em; text-transform: uppercase; color: #444; }
     #map { height: 320px; border-radius: 12px; overflow: hidden; }
+    .location-controls {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr auto;
+      gap: 0.6rem;
+      align-items: end;
+    }
+    .location-controls label {
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.62rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .location-controls select,
+    .location-controls input {
+      min-width: 0;
+      border: 1px solid #24243a;
+      border-radius: 6px;
+      background: #080810;
+      color: #eee;
+      padding: 0.62rem 0.7rem;
+      font: inherit;
+      letter-spacing: 0;
+    }
+    .location-controls button {
+      border: 1px solid #33334d;
+      border-radius: 6px;
+      background: #151528;
+      color: #ddd;
+      padding: 0.66rem 0.85rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #currentLocationLabel {
+      color: #888;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
 
     .leaflet-popup-content-wrapper { background: #0f0f1c; color: #ccc; border: 1px solid #1e1e30; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
     .leaflet-popup-tip { background: #0f0f1c; }
@@ -216,6 +336,14 @@ const API_BASE = "http://localhost:8001";
       letter-spacing: 0.12em;
       color: #2a2a3a;
       text-transform: uppercase;
+    }
+
+    @media (max-width: 720px) {
+      .journey-form,
+      .cache-status,
+      .location-controls {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -246,6 +374,39 @@ const API_BASE = "http://localhost:8001";
     </label>
   </div>
 
+  <!-- Explicit journey cache step -->
+  <section class="journey-panel">
+    <div class="journey-form">
+      <label>
+        Origin
+        <input id="originInput" value="Berlin" />
+      </label>
+      <label>
+        Destination
+        <input id="destinationInput" value="Hamburg" />
+      </label>
+      <button id="cacheJourneyBtn" type="button">Plan + Cache</button>
+    </div>
+    <div class="cache-status">
+      <div class="cache-stat">
+        <div class="k">Journey</div>
+        <div class="v" id="cacheJourney">Not started</div>
+      </div>
+      <div class="cache-stat">
+        <div class="k">Cache Source</div>
+        <div class="v" id="cacheSource">None</div>
+      </div>
+      <div class="cache-stat">
+        <div class="k">Stations</div>
+        <div class="v" id="cacheStations">0 cached</div>
+      </div>
+      <div class="cache-stat">
+        <div class="k">Offline Ready</div>
+        <div class="v" id="cacheReady">No</div>
+      </div>
+    </div>
+  </section>
+
   <!-- Mic button -->
   <div class="ring idle" id="ring">
     <button id="voiceBtn" class="idle">
@@ -269,9 +430,29 @@ const API_BASE = "http://localhost:8001";
     </div>
   </div>
 
-  <!-- Map revealed when backend returns show_map action -->
+  <!-- Cached stations map appears after journey planning -->
   <div id="map-wrap">
-    <div class="card-label">Nearby Chargers</div>
+    <div class="card-label">Cached Route Chargers</div>
+    <div class="location-controls">
+      <label>
+        Current Location
+        <select id="locationPreset">
+          <option value="52.52,13.405,Berlin start">Berlin start</option>
+          <option value="52.92,12.80,Mid-route near Neuruppin">Mid-route</option>
+          <option value="53.55,10.00,Hamburg arrival">Hamburg arrival</option>
+        </select>
+      </label>
+      <label>
+        Lat
+        <input id="latInput" value="52.5200" />
+      </label>
+      <label>
+        Lng
+        <input id="lngInput" value="13.4050" />
+      </label>
+      <button id="applyLocationBtn" type="button">Move Car</button>
+    </div>
+    <div id="currentLocationLabel">Current location: Berlin start</div>
     <div id="map"></div>
   </div>
 
@@ -287,6 +468,9 @@ const API_BASE = "http://localhost:8001";
   let journeyId     = 'trip_' + Math.random().toString(36).slice(2, 10);
   let leafletMap    = null;
   let markers       = [];
+  let currentMarker = null;
+  let cachedStations = [];
+  let currentLocation = { lat: 52.52, lng: 13.405, label: 'Berlin start' };
 
   // ── DOM refs
   const ring        = document.getElementById('ring');
@@ -303,6 +487,18 @@ const API_BASE = "http://localhost:8001";
   const rangeInput  = document.getElementById('range');
   const batteryVal  = document.getElementById('batteryVal');
   const rangeVal    = document.getElementById('rangeVal');
+  const originInput = document.getElementById('originInput');
+  const destinationInput = document.getElementById('destinationInput');
+  const cacheJourneyBtn = document.getElementById('cacheJourneyBtn');
+  const cacheJourney = document.getElementById('cacheJourney');
+  const cacheSource = document.getElementById('cacheSource');
+  const cacheStations = document.getElementById('cacheStations');
+  const cacheReady = document.getElementById('cacheReady');
+  const locationPreset = document.getElementById('locationPreset');
+  const latInput = document.getElementById('latInput');
+  const lngInput = document.getElementById('lngInput');
+  const applyLocationBtn = document.getElementById('applyLocationBtn');
+  const currentLocationLabel = document.getElementById('currentLocationLabel');
 
   // ── Slider live labels
   batteryInput.addEventListener('input', () => batteryVal.textContent = batteryInput.value);
@@ -313,17 +509,19 @@ const API_BASE = "http://localhost:8001";
     networkLabel.textContent = onlineToggle.checked ? 'Online' : 'Offline';
   });
 
-  // ── Bootstrap journey
-  fetch(`${API_BASE}/journey/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ journeyId }),
-  }).catch(() => {}); // non-blocking; fails gracefully if backend is down
-
   // ── Button
   btn.addEventListener('click', async () => {
     if (!isRecording) await startRecording();
     else               stopRecording();
+  });
+
+  cacheJourneyBtn.addEventListener('click', planAndCacheJourney);
+  locationPreset.addEventListener('change', () => {
+    const [lat, lng, label] = locationPreset.value.split(',');
+    setCurrentLocation(Number(lat), Number(lng), label);
+  });
+  applyLocationBtn.addEventListener('click', () => {
+    setCurrentLocation(Number(latInput.value), Number(lngInput.value), 'Custom location');
   });
 
   function setUI(state) {
@@ -387,52 +585,195 @@ const API_BASE = "http://localhost:8001";
     }
 
     try {
-      // 2. Send transcript to orchestrator
-      const cRes  = await fetch(`${API_BASE}/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          journeyId,
-          transcript,
-          network: { online: onlineToggle.checked },
-          vehicle: {
-            batteryPercent: Number(batteryInput.value),
-            rangeKm:        Number(rangeInput.value),
-            lat: 52.52,
-            lng: 13.405,
-            connector: 'CCS',
-          },
-        }),
-      });
-      if (!cRes.ok) throw new Error(`Command failed: ${cRes.status}`);
-      const cData = await cRes.json();
-
-      responseEl.textContent = cData.spokenResponse ?? JSON.stringify(cData);
-      responseEl.classList.remove('placeholder');
-
-      // Route badge
-      if (cData.route) {
-        routeBadge.textContent = cData.route.replace(/_/g, ' ');
-        routeBadge.className   = 'route-badge ' + cData.route;
-        routeBadge.style.display = 'inline-block';
-      }
-
-      // Show map if backend signals show_map intent
-      if (cData.actions?.some(a => a.type === 'show_map')) {
-        showMap(cData.selectedStation, cData.alternatives ?? []);
-      }
-
-      // Speak the response aloud
-      const utterance = new SpeechSynthesisUtterance(cData.spokenResponse);
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(utterance);
-
+      const cData = await sendCommand(transcript);
+      renderCommandResult(cData);
       setStatus('Done', 'done');
     } catch (err) {
       setStatus('Command error: ' + err.message, 'error');
     }
+  }
+
+  async function planAndCacheJourney() {
+    if (!onlineToggle.checked) {
+      setStatus('Go online to plan and cache a journey', 'error');
+      return;
+    }
+
+    const origin = originInput.value.trim();
+    const destination = destinationInput.value.trim();
+    if (!origin || !destination) {
+      setStatus('Enter origin and destination', 'error');
+      return;
+    }
+
+    const transcript = `Plan a journey from ${origin} to ${destination}`;
+    cacheJourneyBtn.disabled = true;
+    setStatus('Planning route and caching chargers...', 'processing');
+    transcriptEl.textContent = transcript;
+    transcriptEl.classList.remove('placeholder');
+
+    try {
+      const cData = await sendCommand(transcript);
+      renderCommandResult(cData);
+      updateCachePanel(cData, origin, destination);
+      setStatus('Journey cache ready', 'done');
+    } catch (err) {
+      setStatus('Journey cache error: ' + err.message, 'error');
+    } finally {
+      cacheJourneyBtn.disabled = false;
+    }
+  }
+
+  function vehiclePayload() {
+    return {
+      batteryPercent: Number(batteryInput.value),
+      rangeKm:        Number(rangeInput.value),
+      lat: currentLocation.lat,
+      lng: currentLocation.lng,
+      connector: 'CCS',
+    };
+  }
+
+  async function sendCommand(transcript) {
+    const cRes = await fetch(`${API_BASE}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        journeyId,
+        transcript,
+        network: { online: onlineToggle.checked },
+        vehicle: vehiclePayload(),
+      }),
+    });
+    if (!cRes.ok) throw new Error(`Command failed: ${cRes.status}`);
+    return cRes.json();
+  }
+
+  function renderCommandResult(cData) {
+    responseEl.textContent = cData.spokenResponse ?? JSON.stringify(cData);
+    responseEl.classList.remove('placeholder');
+
+    if (cData.route) {
+      routeBadge.textContent = cData.route.replace(/_/g, ' ');
+      routeBadge.className = 'route-badge ' + cData.route;
+      routeBadge.style.display = 'inline-block';
+    }
+
+    if (cData.actions?.some(a => a.type === 'show_map')) {
+      renderStationMap(cachedStations, cData.selectedStation, cData.alternatives ?? []);
+    } else if (cData.selectedStation) {
+      renderStationMap(cachedStations, cData.selectedStation, cData.alternatives ?? []);
+    }
+
+    const cacheAction = cData.actions?.find(a => a.type === 'journey_cache_created');
+    if (cacheAction) {
+      const payload = cacheAction.payload ?? {};
+      updateCachePanel(
+        cData,
+        payload.origin ?? originInput.value.trim() ?? 'Origin',
+        payload.destination ?? destinationInput.value.trim() ?? 'Destination',
+      );
+      if (payload.origin) originInput.value = payload.origin;
+      if (payload.destination) destinationInput.value = payload.destination;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(cData.spokenResponse);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  }
+
+  function updateCachePanel(cData, origin, destination) {
+    const payload = cData.actions?.find(a => a.type === 'journey_cache_created')?.payload ?? {};
+    const stationCount = payload.stationCount ?? cData.debug?.cacheStationCount ?? 0;
+    const source = payload.source ?? 'cache';
+
+    cacheJourney.textContent = `${origin} → ${destination}`;
+    cacheSource.textContent = source;
+    cacheStations.textContent = `${stationCount} cached`;
+    cacheReady.textContent = stationCount > 0 ? 'Yes' : 'No';
+    loadJourneyCacheMap();
+  }
+
+  async function loadJourneyCacheMap() {
+    try {
+      const res = await fetch(`${API_BASE}/journey/${journeyId}/cache`);
+      if (!res.ok) throw new Error(`Cache fetch failed: ${res.status}`);
+      const cache = await res.json();
+      cachedStations = cache.stations ?? [];
+      renderStationMap(cachedStations);
+    } catch (err) {
+      setStatus('Map cache error: ' + err.message, 'error');
+    }
+  }
+
+  function setCurrentLocation(lat, lng, label) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setStatus('Enter a valid location', 'error');
+      return;
+    }
+    currentLocation = { lat, lng, label };
+    latInput.value = lat.toFixed(4);
+    lngInput.value = lng.toFixed(4);
+    currentLocationLabel.textContent = `Current location: ${label} (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+    renderStationMap(cachedStations);
+    setStatus('Location updated. Ask for a charger again.', 'done');
+  }
+
+  function renderStationMap(stations, selected = null, alternatives = []) {
+    const wrap = document.getElementById('map-wrap');
+    if (!stations?.length && !selected) return;
+    wrap.style.display = 'flex';
+
+    setTimeout(() => {
+      if (!leafletMap) {
+        leafletMap = L.map('map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: 'Â© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 18,
+        }).addTo(leafletMap);
+      } else {
+        leafletMap.invalidateSize();
+      }
+
+      markers.forEach(m => m.remove());
+      markers = [];
+      if (currentMarker) currentMarker.remove();
+      const bounds = [];
+      const selectedId = selected?.id;
+      const alternativeIds = new Set((alternatives ?? []).map(s => s.id));
+
+      currentMarker = L.circleMarker([currentLocation.lat, currentLocation.lng], {
+        radius: 10, color: '#fff', fillColor: '#e02020', fillOpacity: 1, weight: 3,
+      }).addTo(leafletMap);
+      currentMarker.bindPopup(`<b>Current location</b><br>${currentLocation.label}`);
+      bounds.push([currentLocation.lat, currentLocation.lng]);
+
+      leafletMap.off('click');
+      leafletMap.on('click', event => {
+        setCurrentLocation(event.latlng.lat, event.latlng.lng, 'Map click');
+      });
+
+      for (const s of stations ?? []) {
+        const isSelected = s.id === selectedId;
+        const isAlternative = alternativeIds.has(s.id);
+        const m = L.circleMarker([s.lat, s.lng], {
+          radius: isSelected ? 12 : isAlternative ? 9 : 6,
+          color: isSelected ? '#22c55e' : isAlternative ? '#3b82f6' : '#6b7280',
+          fillColor: isSelected ? '#16a34a' : isAlternative ? '#2563eb' : '#374151',
+          fillOpacity: isSelected || isAlternative ? 0.9 : 0.55,
+          weight: isSelected ? 3 : 2,
+        }).addTo(leafletMap);
+        const suffix = isSelected ? '<br><em>Best match for current location</em>' : '';
+        m.bindPopup(`<b>${s.name}</b><br>${s.maxKw ?? '?'} kW Â· ${s.cachedAvailability?.status ?? 'unknown'} availability${suffix}`);
+        markers.push(m);
+        bounds.push([s.lat, s.lng]);
+        if (isSelected) m.openPopup();
+      }
+
+      if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40] });
+    }, 50);
   }
 
   function showMap(selected, alternatives) {

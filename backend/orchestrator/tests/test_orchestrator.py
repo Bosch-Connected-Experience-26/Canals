@@ -73,14 +73,14 @@ def test_plan_journey_uses_maps_api_and_updates_cache(monkeypatch: pytest.Monkey
                 source="maps_api",
             ),
             stations=[
-                Station(
-                    id="maps-demo",
-                    name="Mapped Demo Charger",
-                    lat=53.55,
-                    lng=10.0,
-                    distanceKm=42,
-                    detourKm=2,
-                    maxKw=150,
+                    Station(
+                        id="maps-demo",
+                        name="Mapped Demo Charger",
+                        lat=52.535,
+                        lng=13.42,
+                        distanceKm=42,
+                        detourKm=2,
+                        maxKw=150,
                     connectors=["CCS"],
                     amenities=["coffee"],
                     reliability=0.9,

@@ -44,6 +44,9 @@ Defaults match the repo Docker Compose setup.
 | `MONGODB_URI` | `mongodb://root:root@localhost:27017/?authSource=admin` | MongoDB route-cache connection |
 | `MONGODB_DATABASE` | `canals` | Mongo database name |
 | `MONGODB_COLLECTION` | `journey_caches` | Journey cache collection |
+| `OPENAI_API_KEY` | unset | Enables `/transcribe` via OpenAI Whisper |
+| `MAPS_API_BASE_URL` | `http://localhost:8000` | Maps/route service used by journey planning |
+| `CAR_API_BASE_URL` | `http://localhost:8003` | Car API service for lights commands |
 | `AWS_BEDROCK_ENABLED` | `false` | Enable AWS Bedrock for cloud/live enrichment |
 | `AWS_REGION` | `eu-central-1` | AWS region |
 | `AWS_BEDROCK_MODEL_ID` | `anthropic.claude-3-haiku-20240307-v1:0` | Bedrock model ID |
@@ -68,7 +71,7 @@ Returns service status.
 
 ### `POST /journey/start`
 
-Creates or loads a journey cache in MongoDB from local mock station data. The JSON file stands in for route-prefetched charger data until the maps/POI fetcher is connected.
+Creates or loads a journey cache in MongoDB from local mock station data. This remains useful as a fallback and for tests.
 
 ```json
 {
@@ -85,6 +88,8 @@ Returns cached stations and metadata for demo/debug UI.
 ### `POST /command`
 
 Receives a voice transcript and state, asks the local router what to do, executes local/cloud/fallback behavior, ranks stations when relevant, and returns voice/UI/navigation payloads.
+
+For the primary UI demo, send a transcript like `"Plan a journey from Berlin to Hamburg"`. The orchestrator classifies it as `plan_journey`, calls maps-api for geocoding, route waypoints, and OpenChargeMap stations, then replaces the journey cache with route-specific station data.
 
 ```json
 {
@@ -146,9 +151,14 @@ Response shape:
 ## Demo Scenarios
 
 ```bash
-curl -s -X POST http://localhost:8000/journey/start \
+curl -s -X POST http://localhost:8000/command \
   -H 'Content-Type: application/json' \
-  -d '{"journeyId":"trip_001"}'
+  -d '{
+    "journeyId":"trip_001",
+    "transcript":"Plan a journey from Berlin to Hamburg",
+    "network":{"online":true,"latencyMs":80},
+    "vehicle":{"batteryPercent":34,"rangeKm":145,"lat":52.52,"lng":13.405,"connector":"CCS"}
+  }'
 ```
 
 Local cached search, even while online:

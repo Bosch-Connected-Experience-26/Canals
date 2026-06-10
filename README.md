@@ -209,7 +209,7 @@ sequenceDiagram
 graph LR
     subgraph Edge["Edge (Always Available)"]
         A["Local AI Router"]
-        B["MongoDB Cache<br/>prefetched on journey start"]
+        B["MongoDB Cache<br/>prefetched during journey planning"]
         C["In-memory fallback"]
         D["Astro UI + Leaflet"]
         E["Web Speech API TTS"]
@@ -236,13 +236,13 @@ graph LR
 - Battery / range queries
 - Station search from journey cache
 - Navigate to previously selected station
-- Map display of cached stations
+- Map display of cached stations, including simulated current location
 - Lights on/off via Car API (direct CAN)
 
 **What requires connectivity:**
+- Initial journey planning and charger prefetch
 - Live charger availability
 - Real-time pricing
-- Fresh route-based charger prefetch
 
 ---
 
@@ -344,10 +344,10 @@ Canals local-first
 > OSM + Leaflet.js is MIT licensed and completely free — no API key, no usage cap, no legal review needed for a Bosch hackathon demo. In production, Bosch's existing HERE Maps contract would slot straight in.
 
 **Does it actually work offline?**
-> Yes — if the journey cache has been pre-loaded (via `/journey/start`), charger search, range queries, and map display all work with zero network. The STT step (Whisper) still needs a connection in this prototype; production would swap in Whisper.cpp running on-device.
+> Yes — after the driver plans a journey while online, route chargers are cached in MongoDB. Charger search, range queries, map display, and follow-up navigation then work with zero network. The STT step (Whisper) still needs a connection in this prototype; production would swap in Whisper.cpp running on-device.
 
 **What's the dummy vehicle state for the demo?**
-> Central Berlin (52.52°N, 13.405°E), 80% battery, 200 km range, CCS connector. Swap in real KUKSA signals by pointing `car-api/` at your KUKSA Data Broker instance.
+> The UI starts in central Berlin (52.52°N, 13.405°E), 34% battery, 145 km range, CCS connector. The map lets you move the simulated car along the cached route so recommendations change based on current location.
 
 **Can Canals run on a Raspberry Pi / embedded board?**
 > The orchestrator (FastAPI + local router) runs comfortably on 512 MB RAM. The heaviest dependency is MongoDB — swap for SQLite and it fits on a Raspberry Pi 4 with room to spare.
@@ -404,10 +404,23 @@ Set environment variables for full cloud features:
 
 ```bash
 OPENAI_API_KEY=sk-...          # Whisper STT
+OCM_API_KEY=...                # OpenChargeMap route charger lookup
+PUBLIC_API_BASE=http://localhost:8001
 AWS_BEDROCK_ENABLED=true       # Live availability via Claude Haiku
 AWS_REGION=eu-central-1
 MONGODB_URI=mongodb://...      # Optional — falls back to memory
 ```
+
+### Demo script
+
+1. Open `http://localhost:4321`.
+2. Say or click `Plan a journey from Berlin to Hamburg`.
+3. Confirm the UI shows `maps_api`, cached stations, and the route-charger map.
+4. Toggle offline.
+5. Say `Find a charger I can reach`.
+6. Move the simulated current location on the map and ask again; the selected charger should change.
+7. Say `Is it available right now?` to show `offline_fallback`.
+8. Say `Navigate there` to show the local follow-up action.
 
 ---
 

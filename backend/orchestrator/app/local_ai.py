@@ -152,7 +152,7 @@ Return this exact JSON shape:
     "connector": "{request.vehicle.connector}",
     "minKw": null,
     "amenities": [],
-    "minArrivalBatteryPercent": 10
+  "minArrivalBatteryPercent": 5
   }},
   "confidence": 0.0,
   "reason": "short reason"
