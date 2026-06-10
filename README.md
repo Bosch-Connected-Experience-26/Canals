@@ -358,7 +358,7 @@ Canals local-first
 | Name | Role | GitHub |
 |---|---|---|
 | **Abdulla** | Web UI · Map integration · Backend routing | [@abdalla980](https://github.com/abdalla980) |
-| **Alex** | Frontend · Backend | [@TBD](#) |
+| **Alex** | Frontend · Backend | [@weebpapi](https://github.com/weebpapi) |
 | **Christian** | Backend | [@chriamue](https://github.com/chriamue) |
 | **Li** | Product Design · UX · Product Journey | [@TBD](#) |
 | **Nico** | Automation · Business · Product | [@TBD](#) |
