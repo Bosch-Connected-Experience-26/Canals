@@ -1,10 +1,7 @@
 set dotenv-load := true
 
 structurizr:
-    docker run -it --rm \
-        -p 8080:8080 \
-        -v {{justfile_directory()}}/structurizr:/usr/local/structurizr \
-        structurizr/structurizr local
+    docker compose up -d structurizr
 
 
 cache-service:

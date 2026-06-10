@@ -178,6 +178,16 @@ services:
       - CACHE_SERVICE_URL=http://cache-service:8002
       - CAR_API_URL=http://car-api:8003
 
+  structurizr:
+    image: structurizr/structurizr
+    container_name: canals-structurizr
+    command: local
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./structurizr:/usr/local/structurizr
+    restart: unless-stopped
+
 volumes:
   mongodb-data:
   mongodb-configdb:
