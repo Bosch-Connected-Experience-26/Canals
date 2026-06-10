@@ -360,10 +360,10 @@ Canals local-first
 |---|---|---|
 | **Abdulla** | Web UI · Map integration · Backend routing | [@abdalla980](https://github.com/abdalla980) |
 | **Alex** | Frontend · Backend | [@TBD](#) |
-| **Christian** | Backend · Software Architecture · ML | [@TBD](#) |
+| **Christian** | Backend | [@chriamue](https://github.com/chriamue) |
 | **Li** | Product Design · UX · Product Journey | [@TBD](#) |
 | **Nico** | Automation · Business · Product | [@TBD](#) |
-| **Sofiia** | TBD | [@TBD](#) |
+| **Sofiia** | Hardware | [@SofiiaVarich](https://github.com/SofiiaVarich) |
 
 > **Challenge:** Voice Assistant for Vehicle Control — Future Mobility (Automotive)
 > **Event:** [Bosch Connected Experience 2026](https://bcw.bosch-connected-world.com/) · BCX26
