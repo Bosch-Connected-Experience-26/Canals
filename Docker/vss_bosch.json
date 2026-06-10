@@ -24,6 +24,40 @@
             }
           }
         }
+      },
+      "Powertrain": {
+        "description": "Powertrain control.",
+        "type": "branch",
+        "children": {
+          "StartStop": {
+            "description": "Engine start and stop control.",
+            "type": "branch",
+            "children": {
+              "StartControl": {
+                "datatype": "string",
+                "description": "Controls engine start and stop. Format: [start/stop, client_id].",
+                "type": "actuator"
+              }
+            }
+          }
+        }
+      },
+      "Chassis": {
+        "description": "Chassis control.",
+        "type": "branch",
+        "children": {
+          "Accelerator": {
+            "description": "Accelerator pedal control.",
+            "type": "branch",
+            "children": {
+              "PedalPositionControl": {
+                "datatype": "string",
+                "description": "Controls accelerator pedal position. Format: [pedal_percent, client_id].",
+                "type": "actuator"
+              }
+            }
+          }
+        }
       }
     }
   }

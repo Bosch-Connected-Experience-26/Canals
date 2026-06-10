@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import VEHICLE_HOST, VEHICLE_PORT
+from app.demo import router as demo_router
 from app.lights import router as lights_router
 
 logging.basicConfig(
@@ -26,3 +27,4 @@ app.add_middleware(
 )
 
 app.include_router(lights_router)
+app.include_router(demo_router)

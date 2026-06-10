@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from typing import List, Optional
 
@@ -23,6 +24,10 @@ def rank_stations(
 
     for source_station in cache.stations:
         station = deepcopy(source_station)
+        station.distanceKm = round(
+            _distance_km(vehicle.lat, vehicle.lng, station.lat, station.lng),
+            2,
+        )
         station.estimatedArrivalBatteryPercent = max(
             0,
             vehicle.batteryPercent - (station.distanceKm / max(vehicle.rangeKm, 1)) * vehicle.batteryPercent,
@@ -97,3 +102,14 @@ def _match_reasons(
     if missing_amenities:
         reasons.append(f"missing: {', '.join(missing_amenities)}")
     return reasons
+
+
+def _distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    radius_km = 6371.0
+    d_lat = math.radians(lat2 - lat1)
+    d_lng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lng / 2) ** 2
+    )
+    return radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))

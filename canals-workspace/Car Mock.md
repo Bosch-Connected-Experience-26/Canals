@@ -28,6 +28,8 @@ Started with `--insecure --vss /data/vss_bosch.json`. The `--insecure` flag disa
 |----------|------|--------|-------------|
 | `Vehicle.RequestTakeOver` | actuator (string) | `[priority, client_id]` | Must be sent before any command |
 | `Vehicle.Body.Lights.ExteriorLightControl` | actuator (string) | `[on/off, light_id, client_id]` | Controls exterior lights |
+| `Vehicle.Powertrain.StartStop.StartControl` | actuator (string) | `[start/stop, client_id]` | Used by the demo sequence |
+| `Vehicle.Chassis.Accelerator.PedalPositionControl` | actuator (string) | `[pedal_percent, client_id]` | Used by the demo sequence |
 
 The VSS JSON uses nested `children` format (not the flat VSS 6.0 standard). The databroker assigns internal IDs at startup — signals appear by ID in broker logs, by path in gRPC logs.
 

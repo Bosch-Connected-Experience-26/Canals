@@ -1,0 +1,845 @@
+---
+// Orchestrator base URL — Docker Compose exposes it on 8001; direct uvicorn uses 8000
+const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canals · Voice Control</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #080810;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 2rem;
+      border-bottom: 1px solid #1a1a2e;
+    }
+
+    .logo { font-size: 1rem; letter-spacing: 0.25em; text-transform: uppercase; color: #aaa; font-weight: 500; }
+    .logo span { color: #fff; }
+
+    /* Online/offline toggle */
+    .network-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #666;
+      cursor: pointer;
+      user-select: none;
+    }
+    .network-toggle input { display: none; }
+    .toggle-pill {
+      width: 36px; height: 20px;
+      background: #333;
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .toggle-pill::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px; left: 3px;
+      transition: left 0.2s;
+    }
+    .network-toggle input:checked + .toggle-pill { background: #4caf50; }
+    .network-toggle input:checked + .toggle-pill::after { left: 19px; }
+    .network-label { min-width: 3.5rem; }
+
+    /* ── Main ── */
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2.5rem;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Vehicle state bar ── */
+    .vehicle-bar {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .vehicle-bar label { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+    .vehicle-bar input[type=range] { width: 90px; accent-color: #e02020; }
+    .vehicle-bar .val { color: #aaa; font-size: 0.85rem; }
+
+    /* ── Journey cache planner ── */
+    .journey-panel {
+      width: min(720px, 94vw);
+      display: grid;
+      gap: 0.85rem;
+      padding: 1rem;
+      border: 1px solid #1e1e30;
+      background: #0d0d18;
+      border-radius: 8px;
+    }
+    .journey-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 0.7rem;
+      align-items: end;
+    }
+    .journey-form label {
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .journey-form input {
+      min-width: 0;
+      border: 1px solid #24243a;
+      border-radius: 6px;
+      background: #080810;
+      color: #eee;
+      padding: 0.68rem 0.75rem;
+      font: inherit;
+      letter-spacing: 0;
+    }
+    .journey-form button {
+      border: 1px solid #e02020;
+      border-radius: 6px;
+      background: #e02020;
+      color: #fff;
+      padding: 0.72rem 0.9rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .journey-form button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+    .cache-status {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.6rem;
+    }
+    .cache-stat {
+      border: 1px solid #1a1a2e;
+      border-radius: 6px;
+      padding: 0.65rem;
+      min-height: 64px;
+    }
+    .cache-stat .k {
+      color: #444;
+      font-size: 0.62rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .cache-stat .v {
+      color: #ccc;
+      font-size: 0.86rem;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    /* ── Button ring ── */
+    .ring {
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: box-shadow 0.3s;
+    }
+    .ring.idle   { box-shadow: 0 0 0 3px #fff, 0 0 0 7px #121220; }
+    .ring.active { box-shadow: 0 0 0 3px #e02020, 0 0 40px 10px rgba(224,32,32,0.35); animation: pulse 1.3s ease-in-out infinite; }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 3px #e02020, 0 0 40px 10px rgba(224,32,32,0.35); }
+      50%      { box-shadow: 0 0 0 3px #e02020, 0 0 65px 22px rgba(224,32,32,0.18); }
+    }
+
+    #voiceBtn {
+      width: 162px; height: 162px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      transition: background 0.22s, color 0.22s, transform 0.1s;
+    }
+    #voiceBtn.idle      { background: #ffffff; color: #080810; }
+    #voiceBtn.recording { background: #e02020; color: #ffffff; }
+    #voiceBtn:active    { transform: scale(0.96); }
+    .btn-icon { width: 2rem; height: 2rem; display: block; }
+
+    /* ── Status ── */
+    #status {
+      font-size: 0.82rem;
+      letter-spacing: 0.12em;
+      color: #555;
+      min-height: 1.1em;
+      text-transform: uppercase;
+      transition: color 0.25s;
+    }
+    #status.recording  { color: #e05555; }
+    #status.processing { color: #f0b429; }
+    #status.done       { color: #4caf50; }
+    #status.error      { color: #e02020; }
+
+    /* ── Result cards ── */
+    .cards {
+      width: min(560px, 92vw);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .card {
+      background: #0f0f1c;
+      border: 1px solid #1e1e30;
+      border-radius: 12px;
+      padding: 1rem 1.3rem;
+    }
+    .card-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #444;
+      margin-bottom: 0.45rem;
+    }
+    .card-body {
+      font-size: 0.97rem;
+      line-height: 1.6;
+      color: #ccc;
+      min-height: 1.4em;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .card-body.placeholder { color: #2a2a3c; font-style: italic; }
+
+    /* route badge */
+    .route-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      background: #1a1a2e;
+      color: #888;
+      margin-top: 0.35rem;
+    }
+    .route-badge.local_simple        { color: #4caf50; border: 1px solid #2d4d2d; }
+    .route-badge.local_cache_search  { color: #64b5f6; border: 1px solid #1a2d44; }
+    .route-badge.cloud_required      { color: #f0b429; border: 1px solid #4d3d0a; }
+    .route-badge.offline_fallback    { color: #ff8a65; border: 1px solid #4d2a15; }
+    .route-badge.clarify             { color: #ce93d8; border: 1px solid #3a1f4d; }
+    .route-badge.unsupported         { color: #ef9a9a; border: 1px solid #4d1a1a; }
+
+    /* ── Map card ── */
+    #map-wrap {
+      width: min(720px, 94vw);
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    #map-wrap .card-label { font-size: 0.65rem; letter-spacing: 0.22em; text-transform: uppercase; color: #444; }
+    #map { height: 320px; border-radius: 12px; overflow: hidden; }
+    .location-controls {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr auto;
+      gap: 0.6rem;
+      align-items: end;
+    }
+    .location-controls label {
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.62rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .location-controls select,
+    .location-controls input {
+      min-width: 0;
+      border: 1px solid #24243a;
+      border-radius: 6px;
+      background: #080810;
+      color: #eee;
+      padding: 0.62rem 0.7rem;
+      font: inherit;
+      letter-spacing: 0;
+    }
+    .location-controls button {
+      border: 1px solid #33334d;
+      border-radius: 6px;
+      background: #151528;
+      color: #ddd;
+      padding: 0.66rem 0.85rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #currentLocationLabel {
+      color: #888;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .leaflet-popup-content-wrapper { background: #0f0f1c; color: #ccc; border: 1px solid #1e1e30; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
+    .leaflet-popup-tip { background: #0f0f1c; }
+    .leaflet-popup-content b { color: #fff; }
+    .leaflet-popup-content em { color: #666; font-size: 0.85em; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      color: #2a2a3a;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 720px) {
+      .journey-form,
+      .cache-status,
+      .location-controls {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>Canals</span> · Voice Control</div>
+  <label class="network-toggle" title="Toggle online/offline">
+    <input type="checkbox" id="onlineToggle" checked />
+    <span class="toggle-pill"></span>
+    <span class="network-label" id="networkLabel">Online</span>
+  </label>
+</header>
+
+<main>
+
+  <!-- Vehicle mock state -->
+  <div class="vehicle-bar">
+    <label>
+      Battery
+      <input type="range" id="battery" min="5" max="100" value="34" />
+      <span class="val"><span id="batteryVal">34</span>%</span>
+    </label>
+    <label>
+      Range
+      <input type="range" id="range" min="10" max="500" value="145" step="5" />
+      <span class="val"><span id="rangeVal">145</span> km</span>
+    </label>
+  </div>
+
+  <!-- Explicit journey cache step -->
+  <section class="journey-panel">
+    <div class="journey-form">
+      <label>
+        Origin
+        <input id="originInput" placeholder="e.g. Berlin" />
+      </label>
+      <label>
+        Destination
+        <input id="destinationInput" placeholder="e.g. Hamburg" />
+      </label>
+      <button id="cacheJourneyBtn" type="button">Plan + Cache</button>
+    </div>
+    <div class="cache-status">
+      <div class="cache-stat">
+        <div class="k">Journey</div>
+        <div class="v" id="cacheJourney">Not started</div>
+      </div>
+      <div class="cache-stat">
+        <div class="k">Cache Source</div>
+        <div class="v" id="cacheSource">None</div>
+      </div>
+      <div class="cache-stat">
+        <div class="k">Stations</div>
+        <div class="v" id="cacheStations">0 cached</div>
+      </div>
+      <div class="cache-stat">
+        <div class="k">Offline Ready</div>
+        <div class="v" id="cacheReady">No</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mic button -->
+  <div class="ring idle" id="ring">
+    <button id="voiceBtn" class="idle">
+      <span class="btn-icon" id="btnIcon">
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-6 9a6 6 0 0 0 12 0h2a8 8 0 0 1-7 7.93V21h-2v-3.07A8 8 0 0 1 4 10h2z"/>
+        </svg>
+      </span>
+      <span id="btnLabel">Start</span>
+    </button>
+  </div>
+
+  <div id="status">Ready</div>
+
+  <!-- Result area -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Transcript (Whisper)</div>
+      <div class="card-body placeholder" id="transcript">Say something after pressing Start…</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Assistant Response</div>
+      <div class="card-body placeholder" id="response">Response will appear here…</div>
+      <div id="routeBadge" class="route-badge" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Cached stations map appears after journey planning -->
+  <div id="map-wrap">
+    <div class="card-label">Cached Route Chargers</div>
+    <div class="location-controls">
+      <label>
+        Current Location
+        <select id="locationPreset">
+          <option value="" disabled selected>Plan a journey first</option>
+        </select>
+      </label>
+      <label>
+        Lat
+        <input id="latInput" placeholder="latitude" />
+      </label>
+      <label>
+        Lng
+        <input id="lngInput" placeholder="longitude" />
+      </label>
+      <button id="applyLocationBtn" type="button">Move Car</button>
+    </div>
+    <div id="currentLocationLabel">Current location: Berlin start</div>
+    <div id="map"></div>
+  </div>
+
+</main>
+
+<footer>Canals · Bosch Connected Experience 2026</footer>
+
+<script define:vars={{ API_BASE }}>
+  // ── State
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let isRecording   = false;
+  let journeyId     = 'trip_' + Math.random().toString(36).slice(2, 10);
+  let leafletMap    = null;
+  let markers       = [];
+  let currentMarker = null;
+  let cachedStations = [];
+  let currentLocation = { lat: 52.52, lng: 13.405, label: '' };
+  let plannedOrigin = '';
+  let plannedDestination = '';
+
+  // ── DOM refs
+  const ring        = document.getElementById('ring');
+  const btn         = document.getElementById('voiceBtn');
+  const btnIcon     = document.getElementById('btnIcon');
+  const btnLabel    = document.getElementById('btnLabel');
+  const statusEl    = document.getElementById('status');
+  const transcriptEl= document.getElementById('transcript');
+  const responseEl  = document.getElementById('response');
+  const routeBadge  = document.getElementById('routeBadge');
+  const onlineToggle= document.getElementById('onlineToggle');
+  const networkLabel= document.getElementById('networkLabel');
+  const batteryInput= document.getElementById('battery');
+  const rangeInput  = document.getElementById('range');
+  const batteryVal  = document.getElementById('batteryVal');
+  const rangeVal    = document.getElementById('rangeVal');
+  const originInput = document.getElementById('originInput');
+  const destinationInput = document.getElementById('destinationInput');
+  const cacheJourneyBtn = document.getElementById('cacheJourneyBtn');
+  const cacheJourney = document.getElementById('cacheJourney');
+  const cacheSource = document.getElementById('cacheSource');
+  const cacheStations = document.getElementById('cacheStations');
+  const cacheReady = document.getElementById('cacheReady');
+  const locationPreset = document.getElementById('locationPreset');
+  const latInput = document.getElementById('latInput');
+  const lngInput = document.getElementById('lngInput');
+  const applyLocationBtn = document.getElementById('applyLocationBtn');
+  const currentLocationLabel = document.getElementById('currentLocationLabel');
+
+  // ── Slider live labels
+  batteryInput.addEventListener('input', () => batteryVal.textContent = batteryInput.value);
+  rangeInput.addEventListener('input',   () => rangeVal.textContent   = rangeInput.value);
+
+  // ── Network toggle
+  onlineToggle.addEventListener('change', () => {
+    networkLabel.textContent = onlineToggle.checked ? 'Online' : 'Offline';
+  });
+
+  // ── Button
+  btn.addEventListener('click', async () => {
+    if (!isRecording) await startRecording();
+    else               stopRecording();
+  });
+
+  cacheJourneyBtn.addEventListener('click', planAndCacheJourney);
+  locationPreset.addEventListener('change', () => {
+    const [lat, lng, label] = locationPreset.value.split('|');
+    setCurrentLocation(Number(lat), Number(lng), label);
+  });
+  applyLocationBtn.addEventListener('click', () => {
+    setCurrentLocation(Number(latInput.value), Number(lngInput.value), 'Custom location');
+  });
+
+  function setUI(state) {
+    isRecording = state === 'recording';
+    btn.className  = isRecording ? 'recording' : 'idle';
+    ring.className = isRecording ? 'ring active' : 'ring idle';
+    btnIcon.innerHTML = isRecording
+      ? `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-6 9a6 6 0 0 0 12 0h2a8 8 0 0 1-7 7.93V21h-2v-3.07A8 8 0 0 1 4 10h2z"/></svg>`;
+    btnLabel.textContent = isRecording ? 'Stop' : 'Start';
+  }
+
+  function setStatus(text, cls = '') {
+    statusEl.textContent = text;
+    statusEl.className   = cls;
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks  = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        await processAudio();
+      };
+      mediaRecorder.start();
+      setUI('recording');
+      setStatus('Listening…', 'recording');
+    } catch {
+      setStatus('Mic access denied', 'error');
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder?.state !== 'inactive') {
+      mediaRecorder.stop();
+      setUI('idle');
+      setStatus('Transcribing…', 'processing');
+    }
+  }
+
+  async function processAudio() {
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const form = new FormData();
+    form.append('file', blob, 'recording.webm');
+
+    let transcript = '';
+    try {
+      // 1. Transcribe with Whisper
+      const tRes  = await fetch(`${API_BASE}/transcribe`, { method: 'POST', body: form });
+      if (!tRes.ok) throw new Error(`Transcribe failed: ${tRes.status}`);
+      const tData = await tRes.json();
+      transcript  = tData.text ?? '';
+
+      transcriptEl.textContent = transcript || '(empty)';
+      transcriptEl.classList.remove('placeholder');
+      setStatus('Processing command…', 'processing');
+    } catch (err) {
+      setStatus('Transcription error: ' + err.message, 'error');
+      return;
+    }
+
+    try {
+      const cData = await sendCommand(transcript);
+      renderCommandResult(cData);
+      setStatus('Done', 'done');
+    } catch (err) {
+      setStatus('Command error: ' + err.message, 'error');
+    }
+  }
+
+  async function planAndCacheJourney() {
+    if (!onlineToggle.checked) {
+      setStatus('Go online to plan and cache a journey', 'error');
+      return;
+    }
+
+    const origin = originInput.value.trim();
+    const destination = destinationInput.value.trim();
+    if (!origin || !destination) {
+      setStatus('Enter origin and destination', 'error');
+      return;
+    }
+
+    const transcript = `Plan a journey from ${origin} to ${destination}`;
+    cacheJourneyBtn.disabled = true;
+    setStatus('Planning route and caching chargers...', 'processing');
+    transcriptEl.textContent = transcript;
+    transcriptEl.classList.remove('placeholder');
+
+    try {
+      const cData = await sendCommand(transcript);
+      renderCommandResult(cData);
+      updateCachePanel(cData, origin, destination);
+      setStatus('Journey cache ready', 'done');
+    } catch (err) {
+      setStatus('Journey cache error: ' + err.message, 'error');
+    } finally {
+      cacheJourneyBtn.disabled = false;
+    }
+  }
+
+  function vehiclePayload() {
+    return {
+      batteryPercent: Number(batteryInput.value),
+      rangeKm:        Number(rangeInput.value),
+      lat: currentLocation.lat,
+      lng: currentLocation.lng,
+      connector: 'CCS',
+    };
+  }
+
+  async function sendCommand(transcript) {
+    const cRes = await fetch(`${API_BASE}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        journeyId,
+        transcript,
+        network: { online: onlineToggle.checked },
+        vehicle: vehiclePayload(),
+      }),
+    });
+    if (!cRes.ok) throw new Error(`Command failed: ${cRes.status}`);
+    return cRes.json();
+  }
+
+  function renderCommandResult(cData) {
+    responseEl.textContent = cData.spokenResponse ?? JSON.stringify(cData);
+    responseEl.classList.remove('placeholder');
+
+    if (cData.route) {
+      routeBadge.textContent = cData.route.replace(/_/g, ' ');
+      routeBadge.className = 'route-badge ' + cData.route;
+      routeBadge.style.display = 'inline-block';
+    }
+
+    if (cData.actions?.some(a => a.type === 'show_map')) {
+      renderStationMap(cachedStations, cData.selectedStation, cData.alternatives ?? []);
+    } else if (cData.selectedStation) {
+      renderStationMap(cachedStations, cData.selectedStation, cData.alternatives ?? []);
+    }
+
+    const cacheAction = cData.actions?.find(a => a.type === 'journey_cache_created');
+    if (cacheAction) {
+      const payload = cacheAction.payload ?? {};
+      updateCachePanel(
+        cData,
+        payload.origin ?? originInput.value.trim() ?? 'Origin',
+        payload.destination ?? destinationInput.value.trim() ?? 'Destination',
+      );
+      if (payload.origin) originInput.value = payload.origin;
+      if (payload.destination) destinationInput.value = payload.destination;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(cData.spokenResponse);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  }
+
+  function updateCachePanel(cData, origin, destination) {
+    plannedOrigin = origin;
+    plannedDestination = destination;
+    const payload = cData.actions?.find(a => a.type === 'journey_cache_created')?.payload ?? {};
+    const stationCount = payload.stationCount ?? cData.debug?.cacheStationCount ?? 0;
+    const source = payload.source ?? 'cache';
+
+    cacheJourney.textContent = `${origin} → ${destination}`;
+    cacheSource.textContent = source;
+    cacheStations.textContent = `${stationCount} cached`;
+    cacheReady.textContent = stationCount > 0 ? 'Yes' : 'No';
+    loadJourneyCacheMap();
+  }
+
+  async function loadJourneyCacheMap() {
+    try {
+      const res = await fetch(`${API_BASE}/journey/${journeyId}/cache`);
+      if (!res.ok) throw new Error(`Cache fetch failed: ${res.status}`);
+      const cache = await res.json();
+      cachedStations = cache.stations ?? [];
+      if (cachedStations.length && plannedOrigin) rebuildLocationPresets();
+      renderStationMap(cachedStations);
+    } catch (err) {
+      setStatus('Map cache error: ' + err.message, 'error');
+    }
+  }
+
+  function rebuildLocationPresets() {
+    const n = cachedStations.length;
+    const presets = [
+      { s: cachedStations[0],              label: `Near ${plannedOrigin}` },
+      { s: cachedStations[Math.floor(n / 2)], label: 'Mid-route' },
+      { s: cachedStations[n - 1],          label: `Near ${plannedDestination}` },
+    ];
+    locationPreset.innerHTML = presets
+      .map(p => `<option value="${p.s.lat}|${p.s.lng}|${p.label}">${p.label} — ${p.s.name}</option>`)
+      .join('');
+    const first = presets[0].s;
+    setCurrentLocation(first.lat, first.lng, `Near ${plannedOrigin}`);
+  }
+
+  function setCurrentLocation(lat, lng, label) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setStatus('Enter a valid location', 'error');
+      return;
+    }
+    currentLocation = { lat, lng, label };
+    latInput.value = lat.toFixed(4);
+    lngInput.value = lng.toFixed(4);
+    currentLocationLabel.textContent = `Current location: ${label} (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+    renderStationMap(cachedStations);
+    setStatus('Location updated. Ask for a charger again.', 'done');
+  }
+
+  function renderStationMap(stations, selected = null, alternatives = []) {
+    const wrap = document.getElementById('map-wrap');
+    if (!stations?.length && !selected) return;
+    wrap.style.display = 'flex';
+
+    setTimeout(() => {
+      if (!leafletMap) {
+        leafletMap = L.map('map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: 'Â© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 18,
+        }).addTo(leafletMap);
+      } else {
+        leafletMap.invalidateSize();
+      }
+
+      markers.forEach(m => m.remove());
+      markers = [];
+      if (currentMarker) currentMarker.remove();
+      const bounds = [];
+      const selectedId = selected?.id;
+      const alternativeIds = new Set((alternatives ?? []).map(s => s.id));
+
+      currentMarker = L.circleMarker([currentLocation.lat, currentLocation.lng], {
+        radius: 10, color: '#fff', fillColor: '#e02020', fillOpacity: 1, weight: 3,
+      }).addTo(leafletMap);
+      currentMarker.bindPopup(`<b>Current location</b><br>${currentLocation.label}`);
+      bounds.push([currentLocation.lat, currentLocation.lng]);
+
+      leafletMap.off('click');
+      leafletMap.on('click', event => {
+        setCurrentLocation(event.latlng.lat, event.latlng.lng, 'Map click');
+      });
+
+      for (const s of stations ?? []) {
+        const isSelected = s.id === selectedId;
+        const isAlternative = alternativeIds.has(s.id);
+        const m = L.circleMarker([s.lat, s.lng], {
+          radius: isSelected ? 12 : isAlternative ? 9 : 6,
+          color: isSelected ? '#22c55e' : isAlternative ? '#3b82f6' : '#6b7280',
+          fillColor: isSelected ? '#16a34a' : isAlternative ? '#2563eb' : '#374151',
+          fillOpacity: isSelected || isAlternative ? 0.9 : 0.55,
+          weight: isSelected ? 3 : 2,
+        }).addTo(leafletMap);
+        const suffix = isSelected ? '<br><em>Best match for current location</em>' : '';
+        m.bindPopup(`<b>${s.name}</b><br>${s.maxKw ?? '?'} kW Â· ${s.cachedAvailability?.status ?? 'unknown'} availability${suffix}`);
+        markers.push(m);
+        bounds.push([s.lat, s.lng]);
+        if (isSelected) m.openPopup();
+      }
+
+      if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40] });
+    }, 50);
+  }
+
+  function showMap(selected, alternatives) {
+    const wrap = document.getElementById('map-wrap');
+    wrap.style.display = 'flex';
+
+    setTimeout(() => {
+      if (!leafletMap) {
+        leafletMap = L.map('map');
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 18,
+        }).addTo(leafletMap);
+      } else {
+        leafletMap.invalidateSize();
+      }
+
+      markers.forEach(m => m.remove());
+      markers = [];
+      const bounds = [];
+
+      if (selected) {
+        const m = L.circleMarker([selected.lat, selected.lng], {
+          radius: 12, color: '#22c55e', fillColor: '#16a34a', fillOpacity: 0.9, weight: 2,
+        }).addTo(leafletMap);
+        m.bindPopup(`<b>${selected.name}</b><br>${selected.maxKw} kW · ${selected.cachedAvailability.status} availability<br><em>Best match</em>`).openPopup();
+        markers.push(m);
+        bounds.push([selected.lat, selected.lng]);
+      }
+
+      for (const s of alternatives) {
+        const m = L.circleMarker([s.lat, s.lng], {
+          radius: 9, color: '#3b82f6', fillColor: '#2563eb', fillOpacity: 0.75, weight: 2,
+        }).addTo(leafletMap);
+        m.bindPopup(`<b>${s.name}</b><br>${s.maxKw} kW · ${s.cachedAvailability.status} availability`);
+        markers.push(m);
+        bounds.push([s.lat, s.lng]);
+      }
+
+      if (bounds.length) leafletMap.fitBounds(bounds, { padding: [40, 40] });
+    }, 50);
+  }
+</script>
+
+</body>
+</html>

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from typing import List, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
+from .car_client import CarApiClient
 from .cache import JourneyCacheStore
 from .cloud import CloudGateway
 from .config import load_settings
@@ -28,11 +32,18 @@ app = FastAPI(
     description="Offline-aware orchestration API for EV charging voice control.",
     version="0.1.0",
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 settings = load_settings()
 store = JourneyCacheStore(settings)
 cloud_gateway = CloudGateway(settings)
 local_router = LocalAIRouter(settings)
 maps_client = MapsApiClient(settings)
+car_client = CarApiClient(settings)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -91,6 +102,9 @@ def command(request: CommandRequest) -> CommandResponse:
             ranked, cloud_warnings = cloud_gateway.enrich_live_availability(ranked)
             warnings.extend(cloud_warnings)
 
+        _MAP_TRIGGERS = ("map", "where are", "locations", "nearby", "around me", "show me")
+        wants_map = any(w in request.transcript.lower() for w in _MAP_TRIGGERS)
+
         if not ranked:
             spoken = "I could not find a reachable cached charger that matches those constraints."
             actions: List[CommandAction] = []
@@ -109,6 +123,8 @@ def command(request: CommandRequest) -> CommandResponse:
                     payload={"lat": selected.lat, "lng": selected.lng},
                 )
             ]
+            if wants_map:
+                actions.append(CommandAction(type="show_map", label="Show charger map"))
 
         return CommandResponse(
             route=decision.route,
@@ -211,6 +227,12 @@ def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache)
             debug=_debug(decision, cache, False, []),
         )
 
+    if decision.intent in {"lights_on", "lights_off"}:
+        return _handle_lights_command(decision, cache)
+
+    if decision.intent == "vehicle_demo_sequence":
+        return _handle_vehicle_demo_sequence(decision, cache)
+
     return CommandResponse(
         route=RouteLabel.local_simple,
         spokenResponse=(
@@ -219,6 +241,67 @@ def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache)
         ),
         intent=decision.intent,
         debug=_debug(decision, cache, False, []),
+    )
+
+
+def _handle_lights_command(decision, cache: JourneyCache) -> CommandResponse:
+    enabled = decision.intent == "lights_on"
+    action_type = "vehicle_lights_on" if enabled else "vehicle_lights_off"
+    label = "Turn lights on" if enabled else "Turn lights off"
+    warnings: List[str] = []
+    payload = {"requestedState": "on" if enabled else "off"}
+
+    try:
+        payload["carApi"] = car_client.set_lights(enabled)
+        spoken = "Turning the lights on." if enabled else "Turning the lights off."
+    except Exception as exc:
+        warnings.append(f"Car API unavailable: {exc.__class__.__name__}.")
+        spoken = "I understood the lights command, but I could not reach the car API."
+
+    return CommandResponse(
+        route=RouteLabel.local_simple,
+        spokenResponse=spoken,
+        intent=decision.intent,
+        actions=[
+            CommandAction(
+                type=action_type,
+                label=label,
+                payload=payload,
+            )
+        ],
+        debug=_debug(decision, cache, False, warnings),
+    )
+
+
+def _handle_vehicle_demo_sequence(decision, cache: JourneyCache) -> CommandResponse:
+    warnings: List[str] = []
+    payload = {"sequence": "mini_demo_car"}
+
+    try:
+        car_api_response = car_client.run_demo_sequence()
+        payload["carApi"] = car_api_response
+        skipped = [step for step in car_api_response.get("steps", []) if step.get("status") != "ok"]
+        if skipped:
+            warnings.append(f"Car demo sequence skipped {len(skipped)} unsupported or failed steps.")
+            spoken = "I ran the car demo sequence, but some vehicle signals were skipped."
+        else:
+            spoken = "Running the Mini Demo Car sequence now."
+    except Exception as exc:
+        warnings.append(f"Car API unavailable: {exc.__class__.__name__}.")
+        spoken = "I understood the car demo command, but I could not reach the car API."
+
+    return CommandResponse(
+        route=RouteLabel.local_simple,
+        spokenResponse=spoken,
+        intent=decision.intent,
+        actions=[
+            CommandAction(
+                type="vehicle_demo_sequence",
+                label="Run Mini Demo Car sequence",
+                payload=payload,
+            )
+        ],
+        debug=_debug(decision, cache, False, warnings),
     )
 
 
@@ -251,3 +334,38 @@ def _debug(decision, cache: JourneyCache, cloud_used: bool, warnings: List[str])
         warnings=warnings,
         routerDecision=decision,
     )
+
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)) -> dict:
+    """Transcribe audio via an OpenAI-compatible Whisper API.
+
+    Uses OpenAI Whisper by default (requires OPENAI_API_KEY). Set STT_BASE_URL
+    to point at a local OpenAI-compatible STT server (e.g. speaches /
+    faster-whisper) and STT_MODEL to its model id.
+    """
+    try:
+        import openai  # lazy import — gracefully absent if not installed
+
+        audio_bytes = await file.read()
+        suffix = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            client = openai.OpenAI(
+                base_url=settings.stt_base_url or None,
+                api_key=os.getenv("OPENAI_API_KEY") or "not-needed",
+            )
+            with open(tmp_path, "rb") as f:
+                result = client.audio.transcriptions.create(model=settings.stt_model, file=f)
+        finally:
+            os.unlink(tmp_path)
+
+        return {"text": result.text}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="openai package not installed. Run: pip install openai")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

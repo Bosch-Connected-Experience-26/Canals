@@ -7,6 +7,7 @@ from .models import CommandRequest, RouteLabel, RouterConstraints, RouterDecisio
 
 FAST_WORDS = {"fast", "rapid", "hpc", "ultra", "quick", "150", "250", "300", "350"}
 CHARGER_WORDS = {"charger", "charging", "charge", "station", "plug"}
+MAP_WORDS = {"map", "where are", "locations", "nearby", "around me", "show me"}
 LIVE_WORDS = {
     "available",
     "availability",
@@ -22,6 +23,15 @@ LIVE_WORDS = {
 }
 NAVIGATE_WORDS = {"navigate", "directions", "take me", "go there", "route me"}
 PLAN_WORDS = {"plan", "drive", "trip", "journey", "route from", "from"}
+LIGHT_WORDS = {"light", "lights", "headlight", "headlights", "beam"}
+DEMO_WORDS = {
+    "car demo",
+    "demo sequence",
+    "vehicle demo",
+    "run the demo",
+    "run demo",
+    "show the car",
+}
 
 
 def decide_route(request: CommandRequest) -> RouterDecision:
@@ -39,6 +49,15 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             reason="No transcript was provided.",
         )
 
+    if _contains_any(transcript, DEMO_WORDS):
+        return RouterDecision(
+            route=RouteLabel.local_simple,
+            intent="vehicle_demo_sequence",
+            constraints=constraints,
+            confidence=0.9,
+            reason="The Mini Demo Car sequence is a local vehicle action through the Car API.",
+        )
+
     if _contains_any(transcript, NAVIGATE_WORDS):
         return RouterDecision(
             route=RouteLabel.local_simple,
@@ -47,6 +66,24 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             confidence=0.91,
             reason="Navigation to the previously selected cached station is a local action.",
         )
+
+    if _contains_any(transcript, LIGHT_WORDS):
+        if _contains_any(transcript, {"off", "disable", "turn off", "switch off"}):
+            return RouterDecision(
+                route=RouteLabel.local_simple,
+                intent="lights_off",
+                constraints=constraints,
+                confidence=0.91,
+                reason="Exterior lights are controlled through the local Car API.",
+            )
+        if _contains_any(transcript, {"on", "enable", "turn on", "switch on"}):
+            return RouterDecision(
+                route=RouteLabel.local_simple,
+                intent="lights_on",
+                constraints=constraints,
+                confidence=0.91,
+                reason="Exterior lights are controlled through the local Car API.",
+            )
 
     origin, destination = _extract_journey_points(transcript)
     if origin and destination and _contains_any(transcript, PLAN_WORDS):
@@ -63,6 +100,7 @@ def decide_route(request: CommandRequest) -> RouterDecision:
 
     requires_web = _contains_any(transcript, LIVE_WORDS)
     mentions_charging = _contains_any(transcript, CHARGER_WORDS) or "reach" in transcript
+    mentions_map = _contains_any(transcript, MAP_WORDS)
 
     if requires_web and request.network.online:
         return RouterDecision(
@@ -84,10 +122,10 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             reason="The request needs live data, but the network is offline, so cached data must be used with a freshness warning.",
         )
 
-    if mentions_charging:
+    if mentions_charging or mentions_map:
         return RouterDecision(
             route=RouteLabel.local_cache_search,
-            intent="find_charger",
+            intent="find_charger_map" if mentions_map else "find_charger",
             constraints=constraints,
             confidence=0.92,
             reason="The request can be answered from cached charging station data.",
@@ -124,7 +162,7 @@ def _extract_constraints(transcript: str, vehicle_connector: str) -> RouterConst
         if amenity in transcript:
             amenities.append(amenity)
 
-    min_arrival_battery = 10
+    min_arrival_battery = 5
     battery_match = re.search(r"(\d{1,2})\s*%\s*(?:arrival|when i arrive|left)", transcript)
     if battery_match:
         min_arrival_battery = int(battery_match.group(1))

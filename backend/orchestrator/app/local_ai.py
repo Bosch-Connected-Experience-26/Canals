@@ -17,6 +17,9 @@ SUPPORTED_INTENTS = {
     "check_live_traffic",
     "navigate_selected_station",
     "vehicle_status",
+    "lights_on",
+    "lights_off",
+    "vehicle_demo_sequence",
     "unsupported",
     "unknown",
 }
@@ -90,7 +93,13 @@ class LocalAIRouter:
                 decision.constraints.connector = request.vehicle.connector
             return decision
 
-        if decision.intent in {"navigate_selected_station", "vehicle_status"}:
+        if decision.intent in {
+            "navigate_selected_station",
+            "vehicle_status",
+            "lights_on",
+            "lights_off",
+            "vehicle_demo_sequence",
+        }:
             decision.route = RouteLabel.local_simple
             decision.requiresWeb = False
             return decision
@@ -124,11 +133,16 @@ Allowed intents:
 - check_live_traffic
 - navigate_selected_station
 - vehicle_status
+- lights_on
+- lights_off
+- vehicle_demo_sequence
 - unsupported
 - unknown
 
 Policy:
 - Simple vehicle or navigation commands are local_simple.
+- Turning exterior lights on or off is local_simple with intent lights_on or lights_off.
+- Running the Mini Demo Car sequence is local_simple with intent vehicle_demo_sequence.
 - Charger searches answerable from cached stations are local_cache_search.
 - Explicit live/current availability, live price, traffic, web, or internet requests require live data.
 - If live data is requested and networkOnline is false, use offline_fallback.
@@ -147,7 +161,7 @@ Return this exact JSON shape:
     "connector": "{request.vehicle.connector}",
     "minKw": null,
     "amenities": [],
-    "minArrivalBatteryPercent": 10
+  "minArrivalBatteryPercent": 5
   }},
   "confidence": 0.0,
   "reason": "short reason"

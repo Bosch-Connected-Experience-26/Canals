@@ -1,12 +1,21 @@
+set dotenv-load := true
+
 structurizr:
+<<<<<<< HEAD
     docker run -it --rm \
         -p 8080:8080 \
         -v /c/Users/nicok/code/canals/Canals/structurizr:/usr/local/structurizr \
         structurizr/structurizr local
+=======
+    docker compose up -d structurizr
+>>>>>>> 4811b1f67cca0e555eb728a9313e6a8f50c0e679
 
 
 cache-service:
     docker compose up -d --build cache-service
+
+ui:
+    docker compose up -d --build ui
 
 maps-api:
     docker compose up -d maps-api
@@ -37,12 +46,18 @@ demo-cache:
 demo-nearest:
     curl "http://localhost:8002/nearest?lat=51.3397&lng=12.3731&poi_type=ev_charging"
 
+demo-e2e:
+    powershell -ExecutionPolicy Bypass -File scripts/demo-e2e.ps1
+
 orchestrator:
     docker compose up --build orchestrator
 
 ollama-pull:
     docker compose up -d ollama
-    docker compose exec ollama ollama pull llama3.2:3b
+    docker compose exec ollama ollama pull "${OLLAMA_MODEL:-llama3.2:3b}"
+
+speaches:
+    docker compose --profile stt up -d speaches
 
 api:
     cd backend/orchestrator && uvicorn app.main:app --reload --port 8000
