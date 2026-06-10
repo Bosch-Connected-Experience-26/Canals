@@ -1,6 +1,6 @@
 <div align="center">
 
-#  Canals | (First Letter from each team member)
+#  Canals
 
 ### *The voice that drives with you — even when the cloud doesn't.*
 
