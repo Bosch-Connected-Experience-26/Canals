@@ -2,9 +2,9 @@
 
 #  Canals
 
-### *The voice that drives with you — even when the cloud doesn't.*
+### *A voice that drives with you, even when the cloud doesn't.*
 
-**Hybrid AI-powered in-vehicle voice assistant for EV charging control.**  
+**Hybrid AI-powered in-vehicle voice assistant.**  
 Local-first. Cloud-optional. Always responsive.
 
 [![BCX26](https://img.shields.io/badge/Bosch%20Connected%20Experience-2026-red?style=for-the-badge)](https://bcw.bosch-connected-world.com/)
