@@ -379,11 +379,11 @@ const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
     <div class="journey-form">
       <label>
         Origin
-        <input id="originInput" value="Berlin" />
+        <input id="originInput" placeholder="e.g. Berlin" />
       </label>
       <label>
         Destination
-        <input id="destinationInput" value="Hamburg" />
+        <input id="destinationInput" placeholder="e.g. Hamburg" />
       </label>
       <button id="cacheJourneyBtn" type="button">Plan + Cache</button>
     </div>
@@ -441,18 +441,16 @@ const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
       <label>
         Current Location
         <select id="locationPreset">
-          <option value="52.52,13.405,Berlin start">Berlin start</option>
-          <option value="52.92,12.80,Mid-route near Neuruppin">Mid-route</option>
-          <option value="53.55,10.00,Hamburg arrival">Hamburg arrival</option>
+          <option value="" disabled selected>Plan a journey first</option>
         </select>
       </label>
       <label>
         Lat
-        <input id="latInput" value="52.5200" />
+        <input id="latInput" placeholder="latitude" />
       </label>
       <label>
         Lng
-        <input id="lngInput" value="13.4050" />
+        <input id="lngInput" placeholder="longitude" />
       </label>
       <button id="applyLocationBtn" type="button">Move Car</button>
     </div>
@@ -474,7 +472,9 @@ const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
   let markers       = [];
   let currentMarker = null;
   let cachedStations = [];
-  let currentLocation = { lat: 52.52, lng: 13.405, label: 'Berlin start' };
+  let currentLocation = { lat: 52.52, lng: 13.405, label: '' };
+  let plannedOrigin = '';
+  let plannedDestination = '';
 
   // ── DOM refs
   const ring        = document.getElementById('ring');
@@ -521,7 +521,7 @@ const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
 
   cacheJourneyBtn.addEventListener('click', planAndCacheJourney);
   locationPreset.addEventListener('change', () => {
-    const [lat, lng, label] = locationPreset.value.split(',');
+    const [lat, lng, label] = locationPreset.value.split('|');
     setCurrentLocation(Number(lat), Number(lng), label);
   });
   applyLocationBtn.addEventListener('click', () => {
@@ -691,6 +691,8 @@ const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
   }
 
   function updateCachePanel(cData, origin, destination) {
+    plannedOrigin = origin;
+    plannedDestination = destination;
     const payload = cData.actions?.find(a => a.type === 'journey_cache_created')?.payload ?? {};
     const stationCount = payload.stationCount ?? cData.debug?.cacheStationCount ?? 0;
     const source = payload.source ?? 'cache';
@@ -708,10 +710,25 @@ const API_BASE = import.meta.env.PUBLIC_API_BASE ?? "http://localhost:8001";
       if (!res.ok) throw new Error(`Cache fetch failed: ${res.status}`);
       const cache = await res.json();
       cachedStations = cache.stations ?? [];
+      if (cachedStations.length && plannedOrigin) rebuildLocationPresets();
       renderStationMap(cachedStations);
     } catch (err) {
       setStatus('Map cache error: ' + err.message, 'error');
     }
+  }
+
+  function rebuildLocationPresets() {
+    const n = cachedStations.length;
+    const presets = [
+      { s: cachedStations[0],              label: `Near ${plannedOrigin}` },
+      { s: cachedStations[Math.floor(n / 2)], label: 'Mid-route' },
+      { s: cachedStations[n - 1],          label: `Near ${plannedDestination}` },
+    ];
+    locationPreset.innerHTML = presets
+      .map(p => `<option value="${p.s.lat}|${p.s.lng}|${p.label}">${p.label} — ${p.s.name}</option>`)
+      .join('');
+    const first = presets[0].s;
+    setCurrentLocation(first.lat, first.lng, `Near ${plannedOrigin}`);
   }
 
   function setCurrentLocation(lat, lng, label) {
