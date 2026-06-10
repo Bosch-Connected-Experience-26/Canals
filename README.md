@@ -15,8 +15,9 @@ Local-first. Cloud-optional. Always responsive.
 
 ---
 
-🔗 **[Live Demo →](http://localhost:4321)** &nbsp;|&nbsp; 📖 **[API Docs →](http://localhost:8001/docs)** &nbsp;|&nbsp; 🎥 **[Pitch Deck →](./Canals_v2_-_Pitch_deck.pdf)**
----
+🔗 **[Live Demo →](http://localhost:4321)** &nbsp;|&nbsp; 📖 **[API Docs →](http://localhost:8001/docs)** &nbsp;|&nbsp; 🎥 **[Pitch Deck →](https://extensive-emerald-84nyfzri.edgeone.app/Canals_v2%20-%20Pitch%20deck.pdf)**
+
+------
 
 </div>
 
