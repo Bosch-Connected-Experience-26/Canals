@@ -313,91 +313,22 @@ Canals local-first
 
 ---
 
-## 📊 Analytics Plan
+## 📊 Analytics & Testing
 
-### What We'd Measure
+**Key metrics:** local resolution rate (target >90%), P95 local latency (<80ms), offline fallback triggers (<5%), STT word error rate (<8%).
 
-```mermaid
-graph LR
-    A["Voice command received"] --> B{Route taken}
-    B -->|local_simple| C["Log: latency, intent"]
-    B -->|local_cache_search| D["Log: latency, station_id, cache_age"]
-    B -->|cloud_required| E["Log: latency, cloud_cost, enrichment_delta"]
-    B -->|offline_fallback| F["Log: staleness_minutes, user_satisfaction"]
-    B -->|unsupported| G["Log: transcript → NLU improvement queue"]
-```
-
-### Key Metrics Dashboard
-
-| Metric | Target | Instrument |
-|---|---|---|
-| Local resolution rate | > 90% | `route` field per request |
-| P95 local latency | < 80ms | Request timer middleware |
-| Cache hit rate | > 85% | MongoDB cache metadata |
-| Offline fallback triggers | < 5% | `offline_fallback` route count |
-| STT word error rate | < 8% | Human eval on sampled transcripts |
-| User correction rate | < 15% | Follow-up clarify intents |
-
-### Testing at Bosch Scale
-
-**Phase 1 — Lab (Week 1–2)**
-- Unit tests for router intent detection (pytest, 95%+ coverage)
-- Integration tests against live orchestrator with real audio fixtures
-- Simulate 6 connectivity scenarios: full offline, tunnel, weak LTE, 5G, V2X, handoff
-
-**Phase 2 — Simulation (Week 3–4)**
-- CARLA or IPG CarMaker simulation with synthetic voice commands
-- Replay 500 real EV driver intents from Bosch UX research corpus
-- Measure route accuracy vs a GPT-4 baseline
-
-**Phase 3 — Pilot Fleet (Month 2–3)**
-- 50 Bosch employee vehicles, opt-in
-- A/B: 50% cloud-only, 50% Canals hybrid
-- Primary KPI: task completion rate offline
-
-**Phase 4 — Production Readiness**
-- AUTOSAR Adaptive port
-- ISO 26262 ASIL-B safety analysis for navigation actions
-- GDPR DPA for on-device audio processing
+**At Bosch scale:** start with pytest unit coverage on the router, replay real EV driver intents against the orchestrator, then a 50-vehicle opt-in pilot with A/B against cloud-only — measuring task completion rate offline as the primary KPI.
 
 ---
 
-## 🔮 Future Roadmap
+## 🔮 What's Next
 
-```mermaid
-gantt
-    title Canals — Feature Roadmap
-    dateFormat  YYYY-MM
-    section Core
-    Local STT (Whisper.cpp)       :done,    2026-06, 1M
-    Hybrid routing engine         :done,    2026-06, 1M
-    Interactive charger map       :done,    2026-06, 1M
-    section Near-term
-    Proactive range alerts        :active,  2026-07, 1M
-    Multi-stop journey planning   :         2026-07, 2M
-    Price comparison across networks :      2026-08, 1M
-    section Expansion
-    On-device Whisper (no API)    :         2026-08, 2M
-    KUKSA live vehicle signals    :         2026-09, 1M
-    V2X charger reservation       :         2026-09, 2M
-    Android Auto / CarPlay HMI    :         2026-10, 2M
-    section Enterprise
-    AUTOSAR Adaptive port         :         2026-11, 3M
-    ISO 26262 ASIL-B certification :        2027-01, 4M
-```
-
-### Possible Inline Enhancements
-
-| Feature | Complexity | Impact |
-|---|---|---|
-| **Proactive range alert** — warn before the user asks | Low | ⭐⭐⭐⭐⭐ |
-| **Multi-stop planning** — "plan Berlin → Munich with charges" | Medium | ⭐⭐⭐⭐⭐ |
-| **Price optimiser** — cheapest charger you can reach | Low | ⭐⭐⭐⭐ |
-| **Slot reservation** — "reserve a stall at the next charger" | High | ⭐⭐⭐⭐⭐ |
-| **On-device Whisper.cpp** — zero cloud for STT | Medium | ⭐⭐⭐⭐ |
-| **Personalised preferences** — "remember I prefer CCS, 150kW+" | Low | ⭐⭐⭐ |
-| **Fleet mode** — shared journey cache for logistics trucks | Medium | ⭐⭐⭐⭐ |
-| **V2X integration** — charger broadcasts availability directly | High | ⭐⭐⭐⭐⭐ |
+- **Proactive range alerts** — warn the driver before they ask
+- **Multi-stop planning** — "plan Berlin → Munich with charges"
+- **On-device Whisper.cpp** — eliminate the STT API call entirely
+- **V2X slot reservation** — charger broadcasts directly to the car
+- **Android Auto / CarPlay HMI** — native head-unit integration
+- **AUTOSAR Adaptive port** — production-ready SOME/IP service
 
 ---
 
