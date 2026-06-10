@@ -127,7 +127,7 @@ const API_BASE = "http://localhost:8001";
     #voiceBtn.idle      { background: #ffffff; color: #080810; }
     #voiceBtn.recording { background: #e02020; color: #ffffff; }
     #voiceBtn:active    { transform: scale(0.96); }
-    .btn-icon { font-size: 1.9rem; line-height: 1; }
+    .btn-icon { width: 2rem; height: 2rem; display: block; }
 
     /* ── Status ── */
     #status {
@@ -249,7 +249,11 @@ const API_BASE = "http://localhost:8001";
   <!-- Mic button -->
   <div class="ring idle" id="ring">
     <button id="voiceBtn" class="idle">
-      <span class="btn-icon" id="btnIcon">🎤</span>
+      <span class="btn-icon" id="btnIcon">
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-6 9a6 6 0 0 0 12 0h2a8 8 0 0 1-7 7.93V21h-2v-3.07A8 8 0 0 1 4 10h2z"/>
+        </svg>
+      </span>
       <span id="btnLabel">Start</span>
     </button>
   </div>
@@ -330,7 +334,9 @@ const API_BASE = "http://localhost:8001";
     isRecording = state === 'recording';
     btn.className  = isRecording ? 'recording' : 'idle';
     ring.className = isRecording ? 'ring active' : 'ring idle';
-    btnIcon.textContent  = isRecording ? '⏹' : '🎤';
+    btnIcon.innerHTML = isRecording
+      ? `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-6 9a6 6 0 0 0 12 0h2a8 8 0 0 1-7 7.93V21h-2v-3.07A8 8 0 0 1 4 10h2z"/></svg>`;
     btnLabel.textContent = isRecording ? 'Stop' : 'Start';
   }
 
