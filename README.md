@@ -15,7 +15,7 @@ Local-first. Cloud-optional. Always responsive.
 
 ---
 
-🔗 **[Live Demo →](https://your-production-url-here.com)** &nbsp;|&nbsp; 📖 **[API Docs →](http://localhost:8001/docs)** &nbsp;|&nbsp; 🎥 **[Pitch Deck →](#)**
+🔗  |&nbsp; 📖 **[API Docs →](http://localhost:8001/docs)** &nbsp;|&nbsp; 🎥 **[Pitch Deck →](#)**
 
 ---
 
