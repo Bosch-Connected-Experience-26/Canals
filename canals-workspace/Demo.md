@@ -1,23 +1,50 @@
 # Demo Flow
 
-This is the backend demo path to keep stable before the UI is merged.
+This is the hackathon demo path for the UI-backed, local-first EV charging assistant.
 
 ## Start The Stack
 
 From the repo root:
 
 ```bash
-docker compose up --build orchestrator cache-service maps-api mongodb car-api bosch-car-mock
+docker compose up -d --build ui
 ```
 
 Useful URLs:
 
 ```text
+Voice UI:     http://localhost:4321
 Orchestrator: http://localhost:8001/docs
 Maps API:     http://localhost:8000/docs
-Cache API:    http://localhost:8002/docs
 Car API:      http://localhost:8003/docs
 ```
+
+## UI Demo Flow
+
+1. Keep the UI online.
+2. Say or click `Plan a journey from Berlin to Hamburg`.
+   - Expected route: `local_simple`
+   - Expected action: `journey_cache_created`
+   - Expected cache source: `maps_api`
+   - Meaning: route waypoints and OpenChargeMap stations are cached in MongoDB.
+3. The cached route-charger map appears.
+4. Toggle offline.
+5. Say `Find a charger I can reach`.
+   - Expected route: `local_cache_search`
+   - Expected cloud: `false`
+   - Meaning: cached route data is enough, so the assistant stays local.
+6. Change `Current Location` on the map, then ask again.
+   - Expected: the selected station changes based on simulated car location.
+   - Meaning: cached stations are ranked against current vehicle state, not a fixed point.
+7. Ask `Is it available right now?` while offline.
+   - Expected route: `offline_fallback`
+   - Meaning: live data is unavailable, so cached data is used with a warning.
+8. Say `Navigate there`.
+   - Expected route: `local_simple`
+   - Expected action: `start_navigation`
+9. Say `Turn the lights off` or `Turn the lights on`.
+   - Expected route: `local_simple`
+   - Expected actions: `vehicle_lights_off`, `vehicle_lights_on`
 
 ## Run The Scripted Demo
 
@@ -27,11 +54,11 @@ From PowerShell:
 .\scripts\demo-e2e.ps1
 ```
 
-The script sends the same `/command` requests the UI should send later.
+The script sends representative `/command` requests without using the browser UI.
 
 ## What The Demo Proves
 
-1. Start a journey cache.
+1. Plan a journey while online and cache route chargers.
 2. Ask for a fast charger with coffee.
    - Expected route: `local_cache_search`
    - Expected cloud: `false`
@@ -44,15 +71,14 @@ The script sends the same `/command` requests the UI should send later.
    - Expected route: `offline_fallback`
    - Expected cloud: `false`
    - Meaning: live data is unavailable, so cached data is used with a warning.
-5. Say "Navigate there".
+5. Say `Navigate there`.
    - Expected route: `local_simple`
    - Expected action: `start_navigation`
    - Meaning: the assistant remembers the selected station.
-6. Say "Turn the lights off" and "Turn the lights on".
+6. Say `Turn the lights off` and `Turn the lights on`.
    - Expected route: `local_simple`
    - Expected actions: `vehicle_lights_off`, `vehicle_lights_on`
    - Meaning: voice-style commands can reach the Car API and KUKSA mock path.
-   - Note: "lights off" sends the known-good all-lights-off command, not a single-light-off command.
 
 ## UI Contract
 
@@ -90,13 +116,16 @@ route
 intent
 debug.cloudUsed
 selectedStation.name
+selectedStation.distanceKm
+selectedStation.estimatedArrivalBatteryPercent
 actions[0].type
 debug.warnings
 ```
 
-Suggested preset buttons:
+Suggested preset commands:
 
 ```text
+Plan a journey from Berlin to Hamburg
 Find a fast charger with coffee
 Check live availability
 Is it available right now?
@@ -105,3 +134,5 @@ Navigate there
 Turn the lights off
 Turn the lights on
 ```
+
+The UI also sends the simulated vehicle location from the map controls in `vehicle.lat` and `vehicle.lng`.

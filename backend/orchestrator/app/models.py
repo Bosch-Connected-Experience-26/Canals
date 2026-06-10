@@ -102,7 +102,7 @@ class RouterConstraints(BaseModel):
     minKw: Optional[int] = None
     connector: Optional[str] = None
     amenities: List[str] = []
-    minArrivalBatteryPercent: float = 10
+    minArrivalBatteryPercent: float = 5
 
 
 class RouterDecision(BaseModel):

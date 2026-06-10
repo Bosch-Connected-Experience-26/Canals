@@ -8,6 +8,9 @@ structurizr:
 cache-service:
     docker compose up -d --build cache-service
 
+ui:
+    docker compose up -d --build ui
+
 maps-api:
     docker compose up -d maps-api
 

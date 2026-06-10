@@ -1,4 +1,18 @@
 services:
+  ui:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile.ui
+    container_name: canals-ui
+    ports:
+      - "4321:4321"
+    environment:
+      - PUBLIC_API_BASE=http://localhost:8001
+    depends_on:
+      orchestrator:
+        condition: service_started
+    restart: unless-stopped
+
   orchestrator:
     build:
       context: .

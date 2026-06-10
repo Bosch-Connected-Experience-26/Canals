@@ -145,7 +145,7 @@ def _extract_constraints(transcript: str, vehicle_connector: str) -> RouterConst
         if amenity in transcript:
             amenities.append(amenity)
 
-    min_arrival_battery = 10
+    min_arrival_battery = 5
     battery_match = re.search(r"(\d{1,2})\s*%\s*(?:arrival|when i arrive|left)", transcript)
     if battery_match:
         min_arrival_battery = int(battery_match.group(1))
