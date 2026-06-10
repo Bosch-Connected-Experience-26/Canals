@@ -230,6 +230,9 @@ def _handle_local_simple(request: CommandRequest, decision, cache: JourneyCache)
     if decision.intent in {"lights_on", "lights_off"}:
         return _handle_lights_command(decision, cache)
 
+    if decision.intent == "vehicle_demo_sequence":
+        return _handle_vehicle_demo_sequence(decision, cache)
+
     return CommandResponse(
         route=RouteLabel.local_simple,
         spokenResponse=(
@@ -263,6 +266,38 @@ def _handle_lights_command(decision, cache: JourneyCache) -> CommandResponse:
             CommandAction(
                 type=action_type,
                 label=label,
+                payload=payload,
+            )
+        ],
+        debug=_debug(decision, cache, False, warnings),
+    )
+
+
+def _handle_vehicle_demo_sequence(decision, cache: JourneyCache) -> CommandResponse:
+    warnings: List[str] = []
+    payload = {"sequence": "mini_demo_car"}
+
+    try:
+        car_api_response = car_client.run_demo_sequence()
+        payload["carApi"] = car_api_response
+        skipped = [step for step in car_api_response.get("steps", []) if step.get("status") != "ok"]
+        if skipped:
+            warnings.append(f"Car demo sequence skipped {len(skipped)} unsupported or failed steps.")
+            spoken = "I ran the car demo sequence, but some vehicle signals were skipped."
+        else:
+            spoken = "Running the Mini Demo Car sequence now."
+    except Exception as exc:
+        warnings.append(f"Car API unavailable: {exc.__class__.__name__}.")
+        spoken = "I understood the car demo command, but I could not reach the car API."
+
+    return CommandResponse(
+        route=RouteLabel.local_simple,
+        spokenResponse=spoken,
+        intent=decision.intent,
+        actions=[
+            CommandAction(
+                type="vehicle_demo_sequence",
+                label="Run Mini Demo Car sequence",
                 payload=payload,
             )
         ],

@@ -24,6 +24,14 @@ LIVE_WORDS = {
 NAVIGATE_WORDS = {"navigate", "directions", "take me", "go there", "route me"}
 PLAN_WORDS = {"plan", "drive", "trip", "journey", "route from", "from"}
 LIGHT_WORDS = {"light", "lights", "headlight", "headlights", "beam"}
+DEMO_WORDS = {
+    "car demo",
+    "demo sequence",
+    "vehicle demo",
+    "run the demo",
+    "run demo",
+    "show the car",
+}
 
 
 def decide_route(request: CommandRequest) -> RouterDecision:
@@ -39,6 +47,15 @@ def decide_route(request: CommandRequest) -> RouterDecision:
             constraints=constraints,
             confidence=0.4,
             reason="No transcript was provided.",
+        )
+
+    if _contains_any(transcript, DEMO_WORDS):
+        return RouterDecision(
+            route=RouteLabel.local_simple,
+            intent="vehicle_demo_sequence",
+            constraints=constraints,
+            confidence=0.9,
+            reason="The Mini Demo Car sequence is a local vehicle action through the Car API.",
         )
 
     if _contains_any(transcript, NAVIGATE_WORDS):

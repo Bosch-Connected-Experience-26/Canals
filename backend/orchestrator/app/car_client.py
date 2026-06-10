@@ -16,3 +16,9 @@ class CarApiClient:
             response = client.post(f"{self.base_url}/lights/{path}")
             response.raise_for_status()
             return response.json()
+
+    def run_demo_sequence(self) -> dict:
+        with httpx.Client(timeout=max(self.timeout, 10)) as client:
+            response = client.post(f"{self.base_url}/demo/sequence")
+            response.raise_for_status()
+            return response.json()

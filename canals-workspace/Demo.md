@@ -45,6 +45,10 @@ Car API:      http://localhost:8003/docs
 9. Say `Turn the lights off` or `Turn the lights on`.
    - Expected route: `local_simple`
    - Expected actions: `vehicle_lights_off`, `vehicle_lights_on`
+10. Say `Run the car demo sequence`.
+   - Expected route: `local_simple`
+   - Expected action: `vehicle_demo_sequence`
+   - Meaning: the assistant triggers the KUKSA Mini Demo Car sequence through the Car API.
 
 ## Run The Scripted Demo
 
@@ -79,6 +83,10 @@ The script sends representative `/command` requests without using the browser UI
    - Expected route: `local_simple`
    - Expected actions: `vehicle_lights_off`, `vehicle_lights_on`
    - Meaning: voice-style commands can reach the Car API and KUKSA mock path.
+7. Say `Run the car demo sequence`.
+   - Expected route: `local_simple`
+   - Expected action: `vehicle_demo_sequence`
+   - Meaning: the orchestrator can trigger a multi-step KUKSA vehicle demo while keeping vehicle control behind the Car API.
 
 ## UI Contract
 
@@ -133,6 +141,7 @@ Find a charger I can reach
 Navigate there
 Turn the lights off
 Turn the lights on
+Run the car demo sequence
 ```
 
 The UI also sends the simulated vehicle location from the map controls in `vehicle.lat` and `vehicle.lng`.

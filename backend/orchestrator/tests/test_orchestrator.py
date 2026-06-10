@@ -178,3 +178,66 @@ def test_lights_on_reports_car_api_unavailable(monkeypatch: pytest.MonkeyPatch):
     assert "could not reach the car API" in body["spokenResponse"]
     assert body["actions"][0]["type"] == "vehicle_lights_on"
     assert body["debug"]["warnings"]
+
+
+def test_vehicle_demo_sequence_calls_car_api(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    calls = []
+
+    def fake_run_demo_sequence():
+        calls.append("demo")
+        return {
+            "status": "ok",
+            "vehicle": "test-car:55555",
+            "steps": [
+                {
+                    "name": "takeover",
+                    "signal": "Vehicle.RequestTakeOver",
+                    "value": "[1, 120]",
+                    "status": "ok",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(main.car_client, "run_demo_sequence", fake_run_demo_sequence)
+
+    response = post_command("Run the car demo sequence", online=False)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["route"] == "local_simple"
+    assert body["intent"] == "vehicle_demo_sequence"
+    assert body["spokenResponse"] == "Running the Mini Demo Car sequence now."
+    assert body["actions"][0]["type"] == "vehicle_demo_sequence"
+    assert body["actions"][0]["payload"]["carApi"]["status"] == "ok"
+    assert calls == ["demo"]
+
+
+def test_vehicle_demo_sequence_reports_partial_steps(monkeypatch: pytest.MonkeyPatch):
+    from app import main
+
+    def fake_run_demo_sequence():
+        return {
+            "status": "partial",
+            "vehicle": "test-car:55555",
+            "steps": [
+                {
+                    "name": "start_engine",
+                    "signal": "Vehicle.Powertrain.StartStop.StartControl",
+                    "value": "[1, 120]",
+                    "status": "skipped",
+                    "detail": "unsupported",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(main.car_client, "run_demo_sequence", fake_run_demo_sequence)
+
+    response = post_command("Show the car demo", online=False)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["intent"] == "vehicle_demo_sequence"
+    assert "some vehicle signals were skipped" in body["spokenResponse"]
+    assert body["debug"]["warnings"]
