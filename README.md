@@ -15,8 +15,7 @@ Local-first. Cloud-optional. Always responsive.
 
 ---
 
-🔗  |&nbsp; 📖 **[API Docs →](http://localhost:8001/docs)** &nbsp;|&nbsp; 🎥 **[Pitch Deck →](#)**
-
+🔗 **[Live Demo →](http://localhost:4321)** &nbsp;|&nbsp; 📖 **[API Docs →](http://localhost:8001/docs)** &nbsp;|&nbsp; 🎥 **[Pitch Deck →](./Canals_v2_-_Pitch_deck.pdf)**
 ---
 
 </div>
