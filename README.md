@@ -332,6 +332,28 @@ Canals local-first
 
 ---
 
+## ❓ FAQ
+
+**What does "Canals" stand for?**
+> **C**onnected **A**utomotive **N**atural-language **A**ssistant for **L**ocal **S**earch. It's also a nod to waterways — networks that route traffic efficiently even when the main road is blocked, just like our local-first routing.
+
+**Why is the UI in a web browser and not an actual car screen?**
+> This is a hackathon prototype. The architecture is identical to what would run in a real HMI — the Astro UI maps 1:1 to a Qt or Android Auto render layer, and the FastAPI backend would become an AUTOSAR Adaptive SOME/IP service. The browser is just our fastest path to a working demo in 48 hours.
+
+**Why OpenStreetMap instead of Google Maps or HERE?**
+> OSM + Leaflet.js is MIT licensed and completely free — no API key, no usage cap, no legal review needed for a Bosch hackathon demo. In production, Bosch's existing HERE Maps contract would slot straight in.
+
+**Does it actually work offline?**
+> Yes — if the journey cache has been pre-loaded (via `/journey/start`), charger search, range queries, and map display all work with zero network. The STT step (Whisper) still needs a connection in this prototype; production would swap in Whisper.cpp running on-device.
+
+**What's the dummy vehicle state for the demo?**
+> Central Berlin (52.52°N, 13.405°E), 80% battery, 200 km range, CCS connector. Swap in real KUKSA signals by pointing `car-api/` at your KUKSA Data Broker instance.
+
+**Can Canals run on a Raspberry Pi / embedded board?**
+> The orchestrator (FastAPI + local router) runs comfortably on 512 MB RAM. The heaviest dependency is MongoDB — swap for SQLite and it fits on a Raspberry Pi 4 with room to spare.
+
+---
+
 ## 👥 Team
 
 | Name | Role | GitHub |
