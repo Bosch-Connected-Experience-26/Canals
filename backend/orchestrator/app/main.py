@@ -303,7 +303,12 @@ def _debug(decision, cache: JourneyCache, cloud_used: bool, warnings: List[str])
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)) -> dict:
-    """Transcribe audio using OpenAI Whisper. Requires OPENAI_API_KEY env var."""
+    """Transcribe audio via an OpenAI-compatible Whisper API.
+
+    Uses OpenAI Whisper by default (requires OPENAI_API_KEY). Set STT_BASE_URL
+    to point at a local OpenAI-compatible STT server (e.g. speaches /
+    faster-whisper) and STT_MODEL to its model id.
+    """
     try:
         import openai  # lazy import — gracefully absent if not installed
 
@@ -315,9 +320,12 @@ async def transcribe(file: UploadFile = File(...)) -> dict:
             tmp_path = tmp.name
 
         try:
-            client = openai.OpenAI()
+            client = openai.OpenAI(
+                base_url=settings.stt_base_url or None,
+                api_key=os.getenv("OPENAI_API_KEY") or "not-needed",
+            )
             with open(tmp_path, "rb") as f:
-                result = client.audio.transcriptions.create(model="whisper-1", file=f)
+                result = client.audio.transcriptions.create(model=settings.stt_model, file=f)
         finally:
             os.unlink(tmp_path)
 

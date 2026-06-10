@@ -44,7 +44,9 @@ Defaults match the repo Docker Compose setup.
 | `MONGODB_URI` | `mongodb://root:root@localhost:27017/?authSource=admin` | MongoDB route-cache connection |
 | `MONGODB_DATABASE` | `canals` | Mongo database name |
 | `MONGODB_COLLECTION` | `journey_caches` | Journey cache collection |
-| `OPENAI_API_KEY` | unset | Enables `/transcribe` via OpenAI Whisper |
+| `OPENAI_API_KEY` | unset | Auth for `/transcribe` (OpenAI Whisper, or any key when using a local STT_BASE_URL) |
+| `STT_BASE_URL` | unset | OpenAI-compatible STT endpoint for `/transcribe`, e.g. `http://speaches:8000/v1` for local faster-whisper. Empty = OpenAI Whisper |
+| `STT_MODEL` | `whisper-1` | Model id passed to `/transcribe`, e.g. `Systran/faster-whisper-small` for speaches |
 | `MAPS_API_BASE_URL` | `http://localhost:8000` | Maps/route service used by journey planning |
 | `CAR_API_BASE_URL` | `http://localhost:8003` | Car API service for lights commands |
 | `AWS_BEDROCK_ENABLED` | `false` | Enable AWS Bedrock for cloud/live enrichment |
