@@ -1,3 +1,5 @@
+set dotenv-load := true
+
 structurizr:
     docker run -it --rm \
         -p 8080:8080 \
@@ -48,7 +50,10 @@ orchestrator:
 
 ollama-pull:
     docker compose up -d ollama
-    docker compose exec ollama ollama pull llama3.2:3b
+    docker compose exec ollama ollama pull "${OLLAMA_MODEL:-llama3.2:3b}"
+
+speaches:
+    docker compose --profile stt up -d speaches
 
 api:
     cd backend/orchestrator && uvicorn app.main:app --reload --port 8000

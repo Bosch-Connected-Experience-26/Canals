@@ -32,6 +32,8 @@ services:
       - USE_OLLAMA_ROUTER=${USE_OLLAMA_ROUTER:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
+      - STT_BASE_URL=${STT_BASE_URL:-}
+      - STT_MODEL=${STT_MODEL:-whisper-1}
       - CAR_API_BASE_URL=http://car-api:8003
       - AWS_REGION=eu-central-1
       - AWS_BEDROCK_ENABLED=false
@@ -53,6 +55,17 @@ services:
       - "11434:11434"
     volumes:
       - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+  speaches:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    container_name: canals-speaches
+    profiles:
+      - stt
+    ports:
+      - "8004:8000"
+    volumes:
+      - speaches-data:/home/ubuntu/.cache/huggingface
     restart: unless-stopped
 
   mongodb:
@@ -170,3 +183,4 @@ volumes:
   mongodb-configdb:
   mongodb-mongot:
   ollama-data:
+  speaches-data:
