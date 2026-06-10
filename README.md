@@ -335,7 +335,7 @@ Canals local-first
 ## ❓ FAQ
 
 **What does "Canals" stand for?**
-> **C**onnected **A**utomotive **N**atural-language **A**ssistant for **L**ocal **S**earch. It's also a nod to waterways — networks that route traffic efficiently even when the main road is blocked, just like our local-first routing.
+> Two things at once. It's the first letter of every team member's name — **C**hristian, **A**lex, **N**ico, **A**bdulla, **L**i, **S**ofiia — and it doubles as **C**onnected **A**utomotive **N**atural-language **A**ssistant for **L**ocal **S**earch. It's also a nod to waterways: networks that route traffic efficiently even when the main road is blocked, just like our local-first routing.
 
 **Why is the UI in a web browser and not an actual car screen?**
 > This is a hackathon prototype. The architecture is identical to what would run in a real HMI — the Astro UI maps 1:1 to a Qt or Android Auto render layer, and the FastAPI backend would become an AUTOSAR Adaptive SOME/IP service. The browser is just our fastest path to a working demo in 48 hours.
